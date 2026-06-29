@@ -1,0 +1,11 @@
+ROPE256:
+    węzły: lista NODE256
+    relacje_globalne:
+        - odległości
+        - sprzężenia
+        - rezonanse
+        - przejścia warstw
+    walidacja_globalna:
+        - zgodność kierunku
+        - zgodność skrętu
+        - zgodność przebiegu
