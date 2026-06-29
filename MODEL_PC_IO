@@ -1,0 +1,16 @@
+MODEL_PC_IO:
+
+    INPUT:
+        - word16 z magistrali
+        - CPU_CORE_16 wyznacza S,K
+
+    PROCESS:
+        - LUT256 zwraca NODE256
+        - NODE256 trafia do ROPE256
+        - ROPE256 aktualizuje relacje
+        - VISUAL_ENGINE tworzy FRAME
+
+    OUTPUT:
+        - FRAME (obraz)
+        - ROPE256 (sznur)
+        - NODE256 (stan)
