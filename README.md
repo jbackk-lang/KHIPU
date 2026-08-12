@@ -1,237 +1,91 @@
-# GIPU
-# TETRAGON-4CPU — ARCHITEKTURA TOPOLOGICZNA
-Pełny model czteroprocesorowej architektury topologicznej opartej na skręcie, kierunku,
-sznurach izometrycznych ROPE48 oraz komunikacji rezonansowej przez figurę tetragonalną.
-
----
-
-# 1. WPROWADZENIE
-
-TETRAGON-4CPU to architektura, w której cztery identyczne procesory topologiczne
-współpracują poprzez wspólną figurę skrętu.  
-Nie używa magistrali, ramek, adresów ani protokołów — komunikacja odbywa się
-wyłącznie przez **rezonans geometryczny**.
-
-Każdy procesor posiada własny sznur ROPE48 (4 warstwy × 12 pozycji), a wszystkie
-sznury są połączone przez wspólny węzeł osiowy (NODE_AXIS).  
-Całość tworzy stabilną, izometryczną strukturę tetragonalną.
-
----
-
-# 2. ELEMENTY SYSTEMU
-
-## 2.1 Procesory topologiczne (CPU_A, CPU_B, CPU_C, CPU_D)
-
-Każdy CPU:
-- 16-bitowy rdzeń skrętu/kierunku
-- DETECT_SCREW(word16) → S
-- DERIVE_DIRECTION(S) → K
-- EMIT_INDEX(S,K) → idx
-
-CPU nie przechowuje danych — generuje:
-- skręt (S)
-- kierunek (K)
-- indeks (idx)
-
----
-
-## 2.2 Sznury ROPE48 (4 × 12)
-
-Każdy CPU posiada własny sznur:
-
-- ROPE48_A  
-- ROPE48_B  
-- ROPE48_C  
-- ROPE48_D  
-
-Struktura:
-- 4 warstwy × 12 pozycji = 48 węzłów
-- każdy węzeł = NODE:
-  - S (skręt)
-  - K (kierunek)
-  - D (droga)
-  - B (brzeg)
-  - W (szerokość)
-  - L (warstwa)
-  - R (relacje)
-
-Izometria:
-- długość sznura = 48
-- brzeg domknięty
-- geometria niezmienna
-
----
-
-## 2.3 Węzeł osiowy (NODE_AXIS)
-
-Wspólny punkt skrętu dla wszystkich CPU:
-
-- S_axis  
-- K_axis  
-- B_axis  
-- L_axis  
-- R_axis  
-
-Połączenia:
-- ROPE48_A ↔ NODE_AXIS  
-- ROPE48_B ↔ NODE_AXIS  
-- ROPE48_C ↔ NODE_AXIS  
-- ROPE48_D ↔ NODE_AXIS  
-
-NODE_AXIS umożliwia:
-- rezonans trójkątny
-- rezonans tetragonalny
-- propagację skrętu między CPU
-
----
-
-## 2.4 LUT256 (wspólna tablica stanów)
-
-Jedna tablica LUT256 dla wszystkich CPU:
-
-- wejście: idx = (S,K)
-- wyjście: NODE (stan topologiczny)
-
-LUT256 jest modyfikowana przez:
-- TIMDR (walidacja skrętu/kierunku)
-- GIPU (relacje i rezonanse)
-
----
-
-## 2.5 TIMDR (globalny walidator skrętu)
-
-TIMDR:
-- waliduje skręt S i kierunek K
-- pilnuje osi 1/2 i φ
-- może wymusić korektę S/K globalnie
-- działa na wszystkie CPU jednocześnie
-
----
-
-## 2.6 GIPU (globalny integrator sznurów)
-
-GIPU:
-- zarządza wszystkimi sznurami ROPE48
-- aktualizuje relacje R
-- synchronizuje warstwy L
-- utrzymuje figury rezonansowe (trójkąt/tetragon)
-
----
-
-# 3. FIGURY REZONANSOWE
-
-## 3.1 TRÓJKĄT (potrójne połączenia)
-
-Aktywne CPU:
-- A, B, C
-
-Relacje osiowe:
-- R_AB_axis  
-- R_BC_axis  
-- R_CA_axis  
-
-Efekt:
-- trójkąt skrętu
-- 3 cykle współrezonujące
-- propagacja ΔS przez trzy węzły
-
----
-
-## 3.2 TETRAGON (poczwórne połączenia)
-
-Aktywne CPU:
-- A, B, C, D
-
-Relacje osiowe:
-- R_AB_axis  
-- R_BC_axis  
-- R_CD_axis  
-- R_DA_axis  
-- przekątne: R_AC_axis, R_BD_axis  
-
-Efekt:
-- pełna kwadratura
-- 4 cykle współrezonujące
-- propagacja ΔS przez całą figurę
-
----
-
-# 4. MECHANIZM KOMUNIKACJI REZONANSOWEJ
-
-## 4.1 Generacja skrętu
-CPU_X generuje:
-- S_X  
-- K_X  
-
-TIMDR waliduje skręt/kierunek.
-
-## 4.2 Propagacja przez oś
-Zmiana ΔS_X trafia do NODE_AXIS.
-
-NODE_AXIS propaguje ΔS do:
-- sąsiadów (boki figury)
-- przekątnych (tetragon)
-- warstw osiowych
-
-## 4.3 Aktualizacja sznurów
-GIPU aktualizuje:
-- ROPE48_X (lokalnie)
-- relacje osiowe (globalnie)
-- figury rezonansowe (trójkąt/tetragon)
-
----
-
-# 5. POJEMNOŚĆ OPERACYJNA
-
-## 5.1 Pojemność jednego CPU
-32 wejścia × 48 pozycji = **1536 stanów operacyjnych**
-
-## 5.2 Pojemność tetragonu 4CPU
-4 × 1536 = **6144 stanów operacyjnych**
-
-## 5.3 Pojemność rezonansowa
-Figury dodają relacje:
-- trójkąt → +15–20%
-- tetragon → +30–40%
-
-Efektywna pojemność:
-- ~8000 stanów operacyjnych
-
----
-
-# 6. WŁAŚCIWOŚCI ARCHITEKTURY
-
-- brak sygnałów  
-- brak ramek  
-- brak adresów  
-- brak protokołów  
-- komunikacja przez skręt  
-- propagacja przez figurę  
-- izometria zachowana  
-- brzeg zachowany  
-- pełna kwadratura  
-- deterministyczne relacje  
-- topologiczna pamięć operacyjna  
-
----
-
-# 7. ZASTOSOWANIA
-
-- AI topologiczne  
-- modele rezonansowe  
-- przetwarzanie równoległe bez magistrali  
-- systemy wieloprocesorowe bez konfliktów  
-- architektury geometryczne  
-- modele predykcyjne oparte na skręcie  
-
----
-
-# 8. STATUS
-
-Moduł kompatybilny z:
-- MODEL_TETRAGON_4CPU.md  
-- RESONANCE_COMM.md  
-- ROPE48.md  
-- TIMDR.md  
-- GIPU.md  
-
+# KHIPU
+
+Pismo węzełkowe a kod binarny — repozytorium łączy trzy warstwy:
+
+1. **Działający kod** (`khipu/`) — implementacja architektury opisanej
+   w dokumentach niżej: procesor topologiczny, pamięć sznurkowa (ROPE),
+   walidacja (TIMDR/GIPU), kompresor, silnik obrazowania — od 1 CPU
+   (`MODEL_PC.md`) do 4 CPU w figurze rezonansowej (`MODEL_TETRAGON_4CPU.md`).
+2. **Koncepcja khipu jako formalizm operatorowy** (`KHIPU_KONCEPCJA.md`) —
+   autorska rama pojęciowa łącząca inkaskie sznury węzełkowe z modelem
+   procesora powyżej.
+3. **Hipoteza historyczna** (`HIPOTEZA_ECHO_OSI.md`) — niezweryfikowane
+   twierdzenie o globalnym przesunięciu osi i „echu” 12 800–11 000 lat
+   temu, jawnie oznaczone jako hipoteza, nie fakt.
+
+Te trzy warstwy są rozdzielone celowo — (1) da się uruchomić i przetestować,
+(2) jest spójną wewnętrznie ramą pojęciową, (3) jest niepotwierdzonym
+twierdzeniem o świecie rzeczywistym. Mieszanie ich w jednym dokumencie
+utrudniało odróżnienie, co jest czym.
+
+## Dokumentacja
+
+| Plik | Zawartość |
+|---|---|
+| `MODEL_PC.md` | pełna architektura jednoprocesorowa (CPU, NODE256, LUT256, ROPE256, TIMDR/GIPU, kompresor, obrazowanie) + status implementacji |
+| `MODEL_TETRAGON_4CPU.md` | architektura 4-procesorowa (ROPE48, NODE_AXIS, figury rezonansowe, pojemność operacyjna) + status implementacji |
+| `KHIPU_KONCEPCJA.md` | formalizm operatorowy τ/J/Λ łączący khipu z modelem procesora — oznaczony jako autorska koncepcja |
+| `HIPOTEZA_ECHO_OSI.md` | hipoteza o przesunięciu osi/echu — oznaczona jako niezweryfikowana |
+| `REORGANIZACJA.md` | co się zmieniło względem poprzedniej wersji repo i dlaczego |
+
+## Kod
+
+```
+khipu/
+    node256.py    NODE256: S, K, D, B, W, L, R
+    cpu.py        CPU_CORE_16: DETECT_SCREW, DERIVE_DIRECTION, EMIT_INDEX
+    lut256.py     LUT256
+    timdr.py      TIMDR (walidacja globalna)
+    gipu.py       GIPU (integrator sznura/relacji)
+    rope.py       ROPE256 (sznur, model jednoprocesorowy)
+    rope48.py     ROPE48 (sznur izometryczny 4x12, model 4-procesorowy)
+    compressor.py COMPRESSOR256
+    visual.py     VISUAL_ENGINE + FRAME_BUFFER
+    axis.py       NODE_AXIS + figury rezonansowe (trójkąt/tetragon)
+    tetragon.py   TetragonSystem — pełny model 4 CPU
+    pipeline.py   SingleCPUSystem — pełny model 1 CPU
+```
+
+Legacy: `node.py` / `rope.py` / `test.py` w katalogu głównym to oryginalny,
+prosty format zapisu tekstowego (CTX/NODE) — zachowany bez zmian
+funkcjonalnych, tylko z dodanymi testami (`tests/test_legacy_rope.py`).
+
+## Szybki start
+
+```bash
+pip install pytest
+python3 -m pytest tests/ -v      # 56 testów
+
+python3 -c "
+from khipu import SingleCPUSystem
+sys = SingleCPUSystem()
+for w in [0, 1234, 65535]:
+    print(sys.feed(w))
+"
+
+python3 -c "
+from khipu import TetragonSystem
+t = TetragonSystem()
+for i, cpu in enumerate(['A','B','C','D']):
+    t.feed(cpu, (i+1) * 4001)
+print('pojemność (min,max,mid):', t.capacity_with_resonance())
+print('relacje osiowe:', t.axial_relations())
+"
+```
+
+## Status
+
+Cały pipeline opisany w `MODEL_PC.md` i `MODEL_TETRAGON_4CPU.md` jest
+zaimplementowany i pokryty testami (56/56 przechodzi). Kilka miejsc
+w oryginalnej specyfikacji było niejednoznacznych (brak konkretnego
+algorytmu bitowego, brak wzoru na niektóre reguły) — każde takie miejsce
+jest oznaczone w kodzie jako `DECYZJA INTERPRETACYJNA` i opisane w sekcji
+„Status implementacji” odpowiedniego dokumentu modelu.
+
+MONITOR_SCREW_FILTERS (faktyczny rendering obrazu z FRAME) nie jest
+zaimplementowany — FRAME zawiera wszystkie dane potrzebne do tego kroku,
+ale wybór biblioteki graficznej pozostawiono na później.
+
+## Licencja
+
+MIT — patrz `LICENSE`.
