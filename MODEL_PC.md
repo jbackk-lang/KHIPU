@@ -1,5 +1,12 @@
 # MODEL_PC — architektura jednoprocesorowa
 
+> **[POCHODZENIE]** Rozwinięcie koncepcji zapoczątkowanej w osobnym repo
+> [jbackk-lang/PC_TIMDR](https://github.com/jbackk-lang/PC_TIMDR)
+> (State9/F4-RED, 252 stany) - tamto repo jest teraz archiwum, dalszy
+> rozwój (włącznie z rozszerzeniem do 4 CPU, patrz `MODEL_TETRAGON_4CPU.md`)
+> jest tutaj.
+
+
 Scalony dokument. Zastępuje: `modelPC.md`, `MODEL_PC_TOPLOGIC.md`,
 `MODEL_PC_MEMORY.md`, `MODEL_PC_VISUAL.md`, `NODE256.md`, `ROPE256`,
 `MODEL_PC_IO`, `COMPRESSOR256.md`, `SPECYFIKACJA_KOMPRESORA_TOPOLOGICZNEGO.md`
