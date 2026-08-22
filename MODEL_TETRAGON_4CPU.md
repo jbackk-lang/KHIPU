@@ -1,5 +1,14 @@
 # MODEL_TETRAGON_4CPU — architektura czteroprocesorowa
 
+> **[TU JEST WERSJA 4-PROCESOROWA]** To jest rozszerzenie do 4 CPU,
+> którego nie ma (i nigdy nie było) w
+> [jbackk-lang/PC_TIMDR](https://github.com/jbackk-lang/PC_TIMDR) -
+> jeśli szukasz modelu wieloprocesorowego wspomnianego przy okazji
+> PC_TIMDR, to jest właśnie ten plik (`khipu/tetragon.py`,
+> `khipu/axis.py`, `khipu/rope48.py`, realnie zaimplementowane i
+> przetestowane).
+
+
 Scalony dokument. Zastępuje: `MODEL_TETRAGON_4CPU.md` (starą wersję) +
 `RESONANCE_COMM.md` + architektoniczną część dawnego `README.md` — te
 trzy pliki opisywały tę samą architekturę niemal dosłownie się powielając

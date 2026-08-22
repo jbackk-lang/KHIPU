@@ -1,5 +1,16 @@
 # KHIPU
 
+> **[POCHODZENIE]** Model 1-procesorowy w tym repo (`MODEL_PC.md`,
+> `khipu/pipeline.py::SingleCPUSystem`) rozwija koncepcję, która
+> zaczęła się w osobnym, wcześniejszym repozytorium
+> **[jbackk-lang/PC_TIMDR](https://github.com/jbackk-lang/PC_TIMDR)**
+> (tam: State9/F4-RED, 252 stany). PC_TIMDR zostało porzucone na rzecz
+> tego repo, m.in. dlatego że dopiero tutaj powstało **rozszerzenie do
+> 4 procesorów** (`MODEL_TETRAGON_4CPU.md`, `khipu/tetragon.py`) - PC_TIMDR
+> nigdy takiego rozszerzenia nie miało. PC_TIMDR ma teraz w swoim README
+> notatkę odsyłającą tutaj, dla porządku ta notatka działa też w drugą
+> stronę.
+
 Pismo węzełkowe a kod binarny — repozytorium łączy trzy warstwy:
 
 1. **Działający kod** (`khipu/`) — implementacja architektury opisanej
