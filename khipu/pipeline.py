@@ -40,8 +40,9 @@ class SingleCPUSystem:
         idx = self.cpu.emit_index(s, k)                # (5)
         node = self.lut.lookup(idx, s=s, k=k)           # (6)
         self.rope.append(node)                          # (7)
-        self.gipu.update_relations(self.rope.nodes)      # (8)
-        frame = self.visual.project(self.rope.nodes)      # (9)
+        self.gipu.extend_relations(self.rope.nodes)      # (8) - O(1) na slowo, patrz gipu.py
+        window = self.rope.nodes[-self.frames.maxlen:]    # naprawiony bug: nie cala historia, patrz visual.py
+        frame = self.visual.project(window)                # (9)
         self.frames.push(frame)
         return node
 

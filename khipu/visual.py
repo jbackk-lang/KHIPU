@@ -59,6 +59,16 @@ class Frame:
 
 class VisualEngine:
     def project(self, nodes: List[Node256]) -> Frame:
+        """
+        UWAGA WYDAJNOŚCIOWA: `project()` jest O(len(nodes)). Wołane raz na
+        KAŻDE słowo z całą, rosnącą historią sznura (jak dawniej robił
+        `SingleCPUSystem.feed()`) daje O(n²) łącznie — dokładnie ten sam
+        wzorzec bugu co w `GIPUIntegrator.update_relations()` (patrz
+        gipu.py). Skoro `FrameBuffer` i tak trzyma tylko ostatnie `maxlen`
+        klatek, wołający powinien przekazywać tu tylko OKNO ostatnich
+        węzłów (np. `nodes[-maxlen:]`), nie całą historię — tak robi teraz
+        `SingleCPUSystem.feed()`.
+        """
         frame = Frame(
             color_map=[_SCREW_COLOR[n.s] for n in nodes],
             vector_map=[_DIRECTION_VECTOR[n.k] for n in nodes],
@@ -73,6 +83,7 @@ class FrameBuffer:
     """Przechowuje ostatnie N klatek, umożliwia analizę zmian sznura."""
 
     def __init__(self, maxlen: int = 32):
+        self.maxlen = maxlen
         self._buffer: deque = deque(maxlen=maxlen)
 
     def push(self, frame: Frame) -> None:
