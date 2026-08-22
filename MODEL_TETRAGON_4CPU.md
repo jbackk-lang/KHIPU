@@ -109,6 +109,20 @@ Zaimplementowane w `khipu/tetragon.py` (`TetragonSystem`) i
 | Figury TRÓJKĄT/TETRAGON | `khipu/axis.py: ResonanceFigure` |
 | Pojemność operacyjna | `TetragonSystem.capacity_*()` — zweryfikowana testem, zgadza się z liczbami z §7 |
 
+### Naprawiony błąd: trwała awaria po 48 słowach na rdzeń (2026-08)
+
+`Rope48.push()` rzucał dawniej `OverflowError` po dokładnie 48 wywołaniach
+i BLOKOWAŁ dalsze działanie CPU na stałe (każdy kolejny `feed()` w
+`TetragonSystem` kończył się nieobsłużonym wyjątkiem) — mimo że własny
+docstring modułu od początku obiecywał "sznur CYKLICZNY". Realnie
+oznaczało to twardy limit 192 słów (4 rdzenie × 48) na cały czas życia
+systemu. **Naprawione**: `push()` jest teraz prawdziwym pierścieniem
+FIFO — po zapełnieniu nadpisuje najstarszy wpis. Zmierzone: 200 000
+słów przetworzone bez awarii, ~14 300 słów/s, każdy sznur trwale
+utrzymuje dokładnie 48 najnowszych węzłów. Długość 48 (4×12, znaczenie
+geometryczne wg architektury) NIE została podniesiona — to nie był
+"za mały limit", tylko brakujące zawijanie.
+
 Decyzje interpretacyjne specyficzne dla tego modułu (poza tymi
 opisanymi w `MODEL_PC.md` §10):
 

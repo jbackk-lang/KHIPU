@@ -153,6 +153,40 @@ spina wszystko poniżej w jeden `FLOW`):
 | VISUAL_ENGINE / FRAME_BUFFER | `khipu/visual.py` | FRAME jako dane, bez renderowania pikseli |
 | MONITOR_SCREW_FILTERS | — | niezaimplementowane (wymaga wyboru biblioteki graficznej) |
 
+### Naprawione błędy wydajności i poprawności (2026-08)
+
+Uruchomienie realnej symulacji (`SingleCPUSystem`/`TetragonSystem` na
+setkach tysięcy słów) ujawniło trzy błędy niewidoczne przy 56 testach
+jednostkowych operujących na małych, statycznych listach:
+
+1. **O(n²) w `GIPU.update_relations()`** — `SingleCPUSystem.feed()`
+   przeliczał relacje dla CAŁEJ historii sznura przy każdym pojedynczym
+   słowie. Zmierzone: 4394 słów/s przy N=500, tylko 793 słów/s przy
+   N=3000 (kwadratowa degradacja), 200 000 słów nie kończyło się w
+   2 minuty. **Naprawione**: nowa metoda `GIPU.extend_relations()`
+   liczy tylko jedną, nową krawędź na dodane słowo — O(1) na słowo,
+   O(n) łącznie. Dodatkowa korzyść: usuwa też błąd POPRAWNOŚCI, bo stara
+   metoda traktowała rosnący, otwarty `Rope256` jako sznur ZAMKNIĘTY
+   (modulo długości), więc relacja danego węzła zmieniała się przy
+   każdym kolejnym słowie, zamiast być ustalona raz na zawsze.
+2. **O(n²) w `VisualEngine.project()`** — ta sama choroba: pełna
+   projekcja całej historii sznura na każde słowo. **Naprawione**:
+   `SingleCPUSystem.feed()` przekazuje teraz tylko okno ostatnich
+   `frame_buffer_size` węzłów (i tak tylko tyle klatek zachowuje
+   `FrameBuffer`).
+3. Po obu naprawach zmierzona przepustowość jest STAŁA niezależnie od
+   długości sznura: ~50 000-56 000 słów/s (dawniej degradowała się do
+   setek/s po kilku tysiącach słów).
+
+**Znany, jeszcze NIE naprawiony problem**: `LUT256.lookup()`
+cache'uje i zwraca TEN SAM obiekt `Node256` dla każdego wystąpienia
+danego `idx` — a realnych par (S,K)/idx jest tylko 7 (patrz niżej), więc
+cały sznur, niezależnie od długości, składa się z odwołań do co najwyżej
+7 współdzielonych, MUTOWALNYCH obiektów, nie z niezależnych węzłów.
+Zmiana `.r` na "jednym" wystąpieniu zmienia je jednocześnie na
+wszystkich innych pozycjach sznura o tym samym idx. To głębszy problem
+niż wydajność — dotyczy poprawności całego modelu pamięci sznura.
+
 ### Decyzje interpretacyjne
 
 Oryginalna dokumentacja opisuje architekturę na poziomie koncepcyjnym,
