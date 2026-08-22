@@ -29,6 +29,18 @@ Te trzy warstwy są rozdzielone celowo — (1) da się uruchomić i przetestowa�
 twierdzeniem o świecie rzeczywistym. Mieszanie ich w jednym dokumencie
 utrudniało odróżnienie, co jest czym.
 
+## Eksperyment: State9/GIPU jako moduł sieci neuronowej
+
+Osobne repo **[jbackk-lang/KHIPU-NEURAL](https://github.com/jbackk-lang/KHIPU-NEURAL)**
+testuje, czy State9/F4-RED i regułę relacji GIPU da się przełożyć na
+uczony (gradientowy) moduł sieci neuronowej, zamiast deterministycznej
+symulacji jak tutaj. Wynik jest **uczciwie negatywny**: na zadaniu
+zaprojektowanym wprost pod regułę GIPU, generyczny MLP bije architekturę
+inspirowaną KHIPU (test MAE 0.365 vs 1.08, przy trywialnym predyktorze
+średniej = 1.03). Osobne repo, bo inna domena (trening gradientowy) niż
+czysto deterministyczna symulacja tutaj — nie miesza się w trójwarstwową
+strukturę tego repo (kod / koncepcja / hipoteza).
+
 ## Dokumentacja
 
 | Plik | Zawartość |
