@@ -123,6 +123,38 @@ utrzymuje dokładnie 48 najnowszych węzłów. Długość 48 (4×12, znaczenie
 geometryczne wg architektury) NIE została podniesiona — to nie był
 "za mały limit", tylko brakujące zawijanie.
 
+### Eksperyment: realne zrównoleglenie 4 "CPU" (2026-08)
+
+`TetragonSystem.feed()` przetwarza słowa sekwencyjnie w jednym wątku
+Pythona (round-robin między CPU A/B/C/D) - żadnej prawdziwej
+równoległości nie ma, mimo nazwy "4-procesorowy". Sprawdzone
+eksperymentalnie w `benchmarks/parallel_vs_sequential.py`, czy realne
+zrównoleglenie przez `multiprocessing` (prawdziwe procesy systemowe -
+wątki nic by nie dały, GIL serializuje pracę CPU-bound) coś by dało.
+
+**Ważne zastrzeżenie**: zmierzone na sandboxie z `os.cpu_count() == 2`,
+NIE na docelowym sprzęcie użytkownika (4+ rdzeniowy Ryzen) - uruchom
+skrypt lokalnie, żeby dostać liczby dla własnej maszyny.
+
+Wyniki (200 000 słów):
+
+| Tryb | słów/s | przyspieszenie | vs fizyczny sufit |
+|---|---|---|---|
+| 4 strumienie sekwencyjnie (1 proces) | 27 432 | - | - |
+| 4 strumienie równolegle (`Pool(4)`, oversubskrybcja na 2 rdzeniach) | 36 513 | 1.33x | ~66% z 2.00x |
+| 2 strumienie sekwencyjnie (1 proces) | 26 190 | - | - |
+| 2 strumienie równolegle (`Pool(2)`, dopasowane do sprzętu) | 36 413 | 1.39x | ~70% z 2.00x |
+
+Wnioski: równoległość realnie pomaga, ale skromnie, nie liniowo z liczbą
+"CPU" - ograniczenia to (a) sandbox ma fizycznie tylko 2 rdzenie, nie 4,
+(b) narzut multiprocessingu (spawn procesu, pickle danych) zjada część
+zysku przy tak lekkiej pracy na pojedyncze słowo. Na prawdziwym 4+
+rdzeniowym Ryzenie należy się spodziewać większego przyspieszenia niż
+tutaj, ale prawdopodobnie wciąż poniżej pełnych 4.00x - efektywność
+65-70% zmierzona tu na 2 rdzeniach jest typowa dla multiprocessingu przy
+lekkich zadaniach. Sanity check: wyniki (nie tylko czas) identyczne w
+obu trybach - `tests/test_benchmarks.py`.
+
 Decyzje interpretacyjne specyficzne dla tego modułu (poza tymi
 opisanymi w `MODEL_PC.md` §10):
 
