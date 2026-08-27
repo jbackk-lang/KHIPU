@@ -51,12 +51,30 @@ wszystkich CPU naraz).
 
 ## 5. Figury rezonansowe
 
-**TRÓJKĄT** (CPU A, B, C): relacje `R_AB_axis, R_BC_axis, R_CA_axis`.
-Efekt: 3 cykle współrezonujące, propagacja ΔS przez trzy węzły.
+**NAPRAWIONA NIESPÓJNOŚĆ (2026-08):** ta sekcja opisywała dawniej relacje
+osiowe jako `R_AB_axis, R_BC_axis, ...` — czyli po jednej na KAŻDĄ krawędź
+i przekątną figury (graf pełny, K3 dla trójkąta / K4 dla tetragonu). Kod
+(`ResonanceFigure.axial_relations()`) rzeczywiście tak liczył, ALE
+parametr `axis` (stan węzła osiowego) był przy tym całkowicie ignorowany
+— czyli to była relacja bezpośrednia CPU↔CPU, nie relacja "przez oś", jak
+głosi §3 wyżej ("połączenia idą WYŁĄCZNIE przez NODE_AXIS"). Naprawiono
+kod, by faktycznie liczył relację względem osi — patrz niżej.
 
-**TETRAGON** (CPU A, B, C, D): relacje `R_AB_axis, R_BC_axis, R_CD_axis,
-R_DA_axis` + przekątne `R_AC_axis, R_BD_axis`. Efekt: pełna kwadratura,
-4 cykle współrezonujące, propagacja ΔS przez całą figurę.
+**TRÓJKĄT** (CPU A, B, C): relacje `R_A_axis, R_B_axis, R_C_axis` — jedna
+na CPU, licząca relację GIPU między węzłem tego CPU a syntetycznym węzłem
+osiowym (`s_axis`/`k_axis`). Efekt: 3 połączenia przez wspólną oś
+(hub-and-spoke), propagacja ΔS przez węzeł osiowy.
+
+**TETRAGON** (CPU A, B, C, D): relacje `R_A_axis, R_B_axis, R_C_axis,
+R_D_axis` — jedna na CPU (4, nie 6), tym samym mechanizmem. Efekt: 4
+połączenia przez wspólną oś, propagacja ΔS przez całą figurę bez
+bezpośrednich połączeń A↔B↔C↔D.
+
+Dawne, bezpośrednie relacje CPU↔CPU (graf pełny, z pominięciem osi) są
+nadal dostępne jawnie przez `ResonanceFigure.direct_relations()` —
+`R_AB, R_BC, R_CA` (trójkąt) / `R_AB, R_BC, R_CD, R_DA, R_AC, R_BD`
+(tetragon) — jako narzędzie diagnostyczne do porównania z topologią
+gwiazdy, NIE jako opis rzeczywistej architektury komunikacji.
 
 ## 6. Mechanizm komunikacji rezonansowej
 
@@ -122,6 +140,19 @@ słów przetworzone bez awarii, ~14 300 słów/s, każdy sznur trwale
 utrzymuje dokładnie 48 najnowszych węzłów. Długość 48 (4×12, znaczenie
 geometryczne wg architektury) NIE została podniesiona — to nie był
 "za mały limit", tylko brakujące zawijanie.
+
+### Naprawiona niespójność: axial_relations() ignorowało oś (2026-08)
+
+Patrz §5 wyżej. `ResonanceFigure.axial_relations()` liczyło relacje
+bezpośrednio CPU↔CPU (graf pełny K3/K4, 6 relacji dla tetragonu),
+ignorując parametr `axis` — sprzeczne z własną dokumentacją modułu
+("połączenia idą WYŁĄCZNIE przez oś"). Żaden z 62 testów tego nie
+wyłapał (`test_axial_relations_covers_all_edges_and_diagonals` sprawdzało
+tylko `len(rel) == 6`). Naprawione: relacja liczona jest teraz przez
+syntetyczny węzeł osiowy (`axis.s_axis`/`axis.k_axis`), jedna na CPU
+(`R_A_axis`..`R_D_axis`, 4 nie 6). Dawne zachowanie zachowane jawnie jako
+`ResonanceFigure.direct_relations()`. Regresja:
+`tests/test_axis.py::test_axial_relations_actually_depend_on_axis_state`.
 
 ### Eksperyment: realne zrównoleglenie 4 "CPU" (2026-08)
 

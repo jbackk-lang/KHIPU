@@ -57,6 +57,7 @@ strukturę tego repo (kod / koncepcja / hipoteza).
 khipu/
     node256.py    NODE256: S, K, D, B, W, L, R
     cpu.py        CPU_CORE_16: DETECT_SCREW, DERIVE_DIRECTION, EMIT_INDEX
+                  + wersje wsadowe/wektorowe (numpy, opcjonalnie)
     lut256.py     LUT256
     timdr.py      TIMDR (walidacja globalna)
     gipu.py       GIPU (integrator sznura/relacji)
@@ -77,7 +78,7 @@ funkcjonalnych, tylko z dodanymi testami (`tests/test_legacy_rope.py`).
 
 ```bash
 pip install pytest
-python3 -m pytest tests/ -v      # 62 testy
+python3 -m pytest tests/ -v      # 70 testów zawsze; 83 gdy zainstalowane numpy+hypothesis (opcjonalne)
 
 python3 -c "
 from khipu import SingleCPUSystem
@@ -99,7 +100,10 @@ print('relacje osiowe:', t.axial_relations())
 ## Status
 
 Cały pipeline opisany w `MODEL_PC.md` i `MODEL_TETRAGON_4CPU.md` jest
-zaimplementowany i pokryty testami (62/62 przechodzi). Kilka miejsc
+zaimplementowany i pokryty testami (70/70 przechodzi zawsze; +13 dalszych
+w `tests/test_cpu_vectorized.py` i `tests/test_properties.py`, które
+wymagają opcjonalnych paczek `numpy`/`hypothesis` i same się pomijają,
+jeśli ich brak — 83/83 gdy obie paczki zainstalowane). Kilka miejsc
 w oryginalnej specyfikacji było niejednoznacznych (brak konkretnego
 algorytmu bitowego, brak wzoru na niektóre reguły) — każde takie miejsce
 jest oznaczone w kodzie jako `DECYZJA INTERPRETACYJNA` i opisane w sekcji
@@ -114,6 +118,37 @@ czasie, `Rope48` poprawnie zawija się jako pierścień FIFO bez błędów na
 setkach tysięcy wywołań `push()` na rdzeń). Przypadki brzegowe (pusty
 sznur, pojedynczy węzeł, nieznana nazwa CPU, `word16` poza zakresem
 16-bit) obsłużone bez wyjątków ani cichych błędów.
+
+Dalsze poprawki po stress-teście (2026-08): (1) `ResonanceFigure.axial_relations()`
+w `axis.py` liczyło relacje bezpośrednio CPU↔CPU (graf pełny), ignorując
+parametr `axis` — sprzeczne z własną dokumentacją modułu ("połączenia
+WYŁĄCZNIE przez oś"); naprawione, patrz `MODEL_TETRAGON_4CPU.md` §5/§10.
+(2) `LUT256.lookup()`/`set()` kopiowały węzły przez `dataclasses.replace()`
+(ponownie waliduje 7 pól przy każdej kopii); zamienione na `copy.copy()`
+(ta sama gwarancja niezależności obiektów, bez zbędnej rewalidacji).
+(3) Dodano `CPUCore16.detect_screw_batch()`/`derive_direction_batch()`/
+`emit_index_batch()`/`classify_batch()` (numpy, opcjonalne) — szybka
+bezstanowa klasyfikacja masowa (12x szybciej niż pętla skalarna dla
+samej klasyfikacji), do analizy rozkładów S/K bez budowania pełnej
+symulacji; **nie** przyspiesza to proporcjonalnie `feed_many()` w całości,
+bo klasyfikacja to tylko ~5.5% czasu pełnego `feed()` na słowo — reszta
+kosztu (ROPE/GIPU/VisualEngine) jest z definicji sekwencyjna.
+(4) Dodano testy własnościowe (`tests/test_properties.py`, opcjonalne
+`hypothesis`) sprawdzające inwarianty (niezależność obiektów LUT256,
+zależność `axial_relations()` od stanu osi) na wielu losowych przypadkach
+zamiast pojedynczych przykładów — dokładnie ten rodzaj testu, którego
+brakowało, by mechanicznie wyłapać oba powyższe błędy wcześniej.
+
+**Audyt numerologia-vs-realna-matematyka (2026-08)**, protokół z
+`timdr-signal-framework` §18 zastosowany do miejsc w kodzie, gdzie φ
+"ma coś znaczyć": znalazł i naprawił dwa błędy martwego kodu, nie kwestie
+interpretacji — `S.BANG` w DETECT_SCREW było matematycznie nieosiągalne
+(zły tiebreak: parzystość sumy dwóch równych liczb jest zawsze parzysta),
+i domyślna tolerancja `φ-1≈0.618` w `TIMDRValidator.validate_rope()`
+przekraczała maksymalne możliwe odchylenie (`0.5`), więc walidacja nie
+mogła nigdy zwrócić `False` dla żadnych danych — dodatkowo nigdzie nie
+wołana w pipeline. Oba naprawione, szczegóły i zweryfikowane liczby w
+`MODEL_PC.md` sekcja "Audyt numerologia vs realna matematyka".
 
 MONITOR_SCREW_FILTERS (faktyczny rendering obrazu z FRAME) nie jest
 zaimplementowany — FRAME zawiera wszystkie dane potrzebne do tego kroku,

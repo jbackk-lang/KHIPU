@@ -198,6 +198,83 @@ przykładzie (10 słów -> 10 niezależnych obiektów) oraz stress-testem na
 testy tożsamości obiektu: `tests/test_lut256.py::test_lookup_returns_independent_objects`,
 `::test_set_stores_independent_copy`.
 
+**Optymalizacja kopiowania w LUT256 (2026-08)**: powyższa poprawka użyła
+`dataclasses.replace()`, które odtwarza obiekt przez `__init__` i więc
+ponownie waliduje wszystkie 7 pól `Node256.__post_init__()` przy KAŻDEJ
+kopii — zmierzony koszt: ~1.9x wolniej niż budowa bez walidacji
+(341 275 obj/s vs 637 538 obj/s). Dane kopiowane tu są już znane jako
+poprawne, więc rewalidacja to czysty narzut. Zamienione na `copy.copy()`
+(płytka kopia — wystarczająca, bo `Node256` ma wyłącznie pola
+niemutowalne `str`/`int`), z tą samą gwarancją niezależności obiektów,
+bez ponownego wywołania `__post_init__`. Te same testy regresyjne dalej
+przechodzą.
+
+**Wsadowa (wektorowa) klasyfikacja (2026-08)**: `khipu/cpu.py` ma teraz
+`CPUCore16.detect_screw_batch()` / `derive_direction_batch()` /
+`emit_index_batch()` / `classify_batch()` — numpy'owe odpowiedniki
+DETECT_SCREW/DERIVE_DIRECTION/EMIT_INDEX dla całych tablic word16
+naraz (opcjonalna zależność, rzuca `ImportError` przy wywołaniu bez
+numpy, moduł importuje się bez numpy normalnie). Zweryfikowane krzyżowo
+ze skalarną implementacją na całej 16-bitowej przestrzeni (65536 wartości,
+0 rozbieżności) i na losowych próbkach `hypothesis`
+(`tests/test_cpu_vectorized.py`, `tests/test_properties.py`). Zmierzone:
+7 497 594 słów/s (wektorowo) vs 627 174 słów/s (skalarnie w pętli) —
+12x szybciej DLA SAMEJ KLASYFIKACJI. **Uczciwe zastrzeżenie**: to NIE
+przyspiesza `SingleCPUSystem.feed_many()` w tej samej proporcji, bo
+klasyfikacja to ok. 5.5% czasu pełnego `feed()` na słowo (1.6 μs z ok.
+29 μs) — reszta (LUT/ROPE/GIPU/VisualEngine) jest z definicji
+sekwencyjna (każdy krok zależy od stanu zbudowanego przez poprzednie).
+Realna wartość: szybka, bezstanowa analiza masowa (np. rozkład S/K
+w dużym pliku danych) bez kosztu budowania pełnej symulacji.
+
+### Audyt "numerologia vs realna matematyka" (2026-08)
+
+Zastosowano protokół z `timdr-signal-framework` §18 (zdefiniuj obiekt i
+metrykę PRZED uruchomieniem, uruchom raz, zgłoś wynik uczciwie) do
+DETECT_SCREW i "zasady 1/2 i φ" w TIMDR — obu miejsc w kodzie, gdzie φ
+pojawia się jako liczba mająca coś "znaczyć". Wynik: **dwa konkretne,
+wcześniej niewykryte błędy martwego kodu**, nie kwestia interpretacji:
+
+1. **`S.BANG` ("S!") było matematycznie nieosiągalne.** Stary tiebreak
+   przy remisie wagi bitowej (`pop_hi == pop_lo`) sprawdzał parzystość
+   sumy `pop_hi + pop_lo` — a suma dwóch RÓWNYCH liczb jest zawsze
+   parzysta, z definicji, niezależnie od konkretnych bitów. Potwierdzone
+   wyczerpującym przeglądem całej przestrzeni 16-bitowej: 0/65536
+   wystąpień `S.BANG` przed naprawą. Naprawione (tiebreak = identyczność
+   bajtów `hi == lo` zamiast parzystości sumy): po naprawie `S.TIMES`
+   255/65536 (0.39%), `S.BANG` 12614/65536 (19.25%) — obie gałęzie
+   faktycznie osiągalne. Patrz `khipu/cpu.py` docstring "NAPRAWIONY
+   MARTWY WARIANT".
+2. **Domyślna tolerancja `φ-1≈0.618` w `TIMDRValidator.validate_rope()`
+   była matematycznie niezdolna do zwrócenia `False`.** `balance` (udział
+   węzłów "rosnących") jest ułamkiem w `[0,1]`, więc `|balance-0.5|` nigdy
+   nie przekracza `0.5` — a `0.5 < φ-1`, więc walidacja PRZECHODZI zawsze,
+   dla dowolnych danych, łącznie ze sznurem złożonym w 100% z jednego
+   kierunku. Dodatkowo `validate_rope()`/`rope_balance()` nie są wołane
+   przez żaden inny moduł w działającym pipeline — ta "walidacja
+   globalna" była podwójnie martwa: nieużywana ORAZ, gdyby użyta,
+   bezwarunkowo zawsze prawdziwa. Naprawione: tolerancja to teraz
+   `2-φ=1/φ²≈0.382` (też liczba wprost z φ, przez tożsamość `φ²=φ+1`),
+   która jest mniejsza od 0.5 i faktycznie potrafi odrzucić skrajny
+   sznur. Patrz `khipu/timdr.py` docstring "NAPRAWIONA TOLERANCJA MARTWA".
+
+**Zweryfikowane empirycznie** (nie tylko dowód analityczny): 200 000
+losowych realnych słów przez pełny pipeline daje `balance≈0.501`
+(przechodzi, jak powinno), sztucznie skrajny sznur teraz poprawnie NIE
+przechodzi z domyślną tolerancją. Regresje:
+`tests/test_cpu.py::test_bang_is_reachable`,
+`tests/test_timdr.py::test_default_tolerance_can_actually_reject_extreme_rope`.
+
+**Uczciwe podsumowanie audytu**: to NIE jest przypadek "wzór z φ okazał
+się fałszywym wzorcem" (jak w przypadkach z `timdr-signal-framework` §18
+dotyczących π/φ/liczb pierwszych) — φ tu nigdy nie miało być odkrytym
+wzorcem, tylko interpretacją niedookreślonej specyfikacji ("zasada 1/2 i
+φ" bez podanego wzoru, jawnie oznaczone `DECYZJA INTERPRETACYJNA` od
+początku). Problem był węższy i bardziej konkretny: SPOSÓB użycia φ (jako
+tolerancji WIĘKSZEJ od możliwego zakresu) czynił regułę martwą niezależnie
+od tego, czy φ "naprawdę coś znaczy" w tym kontekście — a to samo w sobie
+jest wykrywalnym błędem, nie kwestią gustu interpretacyjnego.
+
 ### Decyzje interpretacyjne
 
 Oryginalna dokumentacja opisuje architekturę na poziomie koncepcyjnym,
