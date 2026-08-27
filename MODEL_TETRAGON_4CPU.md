@@ -154,6 +154,42 @@ syntetyczny węzeł osiowy (`axis.s_axis`/`axis.k_axis`), jedna na CPU
 `ResonanceFigure.direct_relations()`. Regresja:
 `tests/test_axis.py::test_axial_relations_actually_depend_on_axis_state`.
 
+### Uogólnienie na dowolne N CPU + wtyczkowy DETECT_SCREW (2026-08)
+
+`ResonanceFigure` (patrz §5 wyżej) przyjmuje teraz, obok dawnych
+`kind="triangle"`/`"tetragon"`, także `cpu_names=(...)` (jawne etykiety)
+albo `n_cpus=N` (etykiety A,B,C.. generowane automatycznie). Krawędzie/
+przekątne liczone są ogólnym wzorem wieloboku (boki = kolejne pary w
+cyklu, przekątne = wszystkie pozostałe pary) — dla N=3/4 daje DOKŁADNIE
+te same listy co dawne hardkodowane stałe (sprawdzone testem równości),
+więc `kind="triangle"`/`"tetragon"` zachowuje się identycznie jak przed
+uogólnieniem. `axial_relations()` (relacja przez oś, jedna na CPU)
+działała już dla dowolnego N od razu, bo iteruje po `self.cpus`, nie po
+krawędziach — to `direct_relations()` (graf pełny, diagnostyczne) i
+`resonance_boost()` wymagały uogólnienia; `resonance_boost()` pozostaje
+zdefiniowane TYLKO dla 3/4 CPU (klucz po LICZBIE CPU, nie po `kind`, żeby
+działało też dla własnych etykiet) i rzuca `NotImplementedError` dla
+innego N zamiast zgadywać liczbę bez podstawy źródłowej.
+
+Przy tej okazji naprawiony utajony błąd w `TetragonSystem`: figura
+zawsze budowała się z hardkodowanych etykiet `("A","B","C","D")`/
+`("A","B","C")`, niezależnie od TREŚCI faktycznych `cpu_names` przekazanych
+do konstruktora — dla domyślnych etykiet niezauważalne (bo identyczne),
+ale dla własnych nazw (`cpu_names=("W","X","Y","Z")`) klucze figury i
+`nodes_by_cpu` byłyby różne, a `axial_relations()`/`direct_relations()`
+cicho zwracałyby puste/błędne wyniki. Naprawione: figura dostaje zawsze
+`cpu_names=self.cpu_names` wprost.
+
+Dodatkowo `TetragonSystem(classifier_fn=...)` (jak `CPUCore16`, patrz
+`MODEL_PC.md`) — przekazywane do KAŻDEGO CPU w tetragonie (wszystkie są
+"identyczne" wg dokumentacji, więc dostają ten sam wstrzyknięty
+klasyfikator).
+
+Regresje: `tests/test_axis.py` (5 nowych testów N-CPU),
+`tests/test_tetragon.py::test_custom_cpu_names_figure_uses_matching_labels`,
+`::test_five_cpu_tetragon_system_works_end_to_end`,
+`::test_classifier_fn_propagates_to_all_cpus`.
+
 ### Eksperyment: realne zrównoleglenie 4 "CPU" (2026-08)
 
 `TetragonSystem.feed()` przetwarza słowa sekwencyjnie w jednym wątku

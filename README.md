@@ -65,9 +65,10 @@ khipu/
     rope48.py     ROPE48 (sznur izometryczny 4x12, model 4-procesorowy)
     compressor.py COMPRESSOR256
     visual.py     VISUAL_ENGINE + FRAME_BUFFER
-    axis.py       NODE_AXIS + figury rezonansowe (trójkąt/tetragon)
-    tetragon.py   TetragonSystem — pełny model 4 CPU
+    axis.py       NODE_AXIS + figury rezonansowe (trójkąt/tetragon/dowolne N)
+    tetragon.py   TetragonSystem — pełny model N CPU (domyślnie 4)
     pipeline.py   SingleCPUSystem — pełny model 1 CPU
+    serialize.py  zapis/odczyt stanu (JSON/pickle) - LUT256, ROPE256, ROPE48
 ```
 
 Legacy: `node.py` / `rope.py` / `test.py` w katalogu głównym to oryginalny,
@@ -78,7 +79,7 @@ funkcjonalnych, tylko z dodanymi testami (`tests/test_legacy_rope.py`).
 
 ```bash
 pip install pytest
-python3 -m pytest tests/ -v      # 70 testów zawsze; 83 gdy zainstalowane numpy+hypothesis (opcjonalne)
+python3 -m pytest tests/ -v      # 101 testów zawsze; 114 gdy zainstalowane numpy+hypothesis (opcjonalne)
 
 python3 -c "
 from khipu import SingleCPUSystem
@@ -100,10 +101,10 @@ print('relacje osiowe:', t.axial_relations())
 ## Status
 
 Cały pipeline opisany w `MODEL_PC.md` i `MODEL_TETRAGON_4CPU.md` jest
-zaimplementowany i pokryty testami (70/70 przechodzi zawsze; +13 dalszych
+zaimplementowany i pokryty testami (101/101 przechodzi zawsze; +13 dalszych
 w `tests/test_cpu_vectorized.py` i `tests/test_properties.py`, które
 wymagają opcjonalnych paczek `numpy`/`hypothesis` i same się pomijają,
-jeśli ich brak — 83/83 gdy obie paczki zainstalowane). Kilka miejsc
+jeśli ich brak — 114/114 gdy obie paczki zainstalowane). Kilka miejsc
 w oryginalnej specyfikacji było niejednoznacznych (brak konkretnego
 algorytmu bitowego, brak wzoru na niektóre reguły) — każde takie miejsce
 jest oznaczone w kodzie jako `DECYZJA INTERPRETACYJNA` i opisane w sekcji
@@ -149,6 +150,22 @@ przekraczała maksymalne możliwe odchylenie (`0.5`), więc walidacja nie
 mogła nigdy zwrócić `False` dla żadnych danych — dodatkowo nigdzie nie
 wołana w pipeline. Oba naprawione, szczegóły i zweryfikowane liczby w
 `MODEL_PC.md` sekcja "Audyt numerologia vs realna matematyka".
+
+**Rozbudowa (2026-08)**, trzy elementy z listy realnych rozszerzeń:
+(1) **wtyczkowy DETECT_SCREW** — `CPUCore16(classifier_fn=...)` pozwala
+podmienić klasyfikator word16->S bez edycji `cpu.py` (`SingleCPUSystem`/
+`TetragonSystem` przyjmują ten sam parametr i przekazują dalej); (2)
+**figura rezonansowa dla dowolnego N CPU** — `ResonanceFigure` przyjmuje
+teraz `cpu_names=(...)`/`n_cpus=N` obok dawnych `kind="triangle"/"tetragon"`
+(które dają identyczny wynik jak przed zmianą), a `TetragonSystem` już
+nie miesza etykiet figury z rzeczywistymi nazwami CPU (naprawiony przy
+okazji utajony błąd: własne `cpu_names` dawały wcześniej ciche puste
+wyniki `axial_relations()`); (3) **strumieniowe API i serializacja** —
+`SingleCPUSystem.feed_stream()` (generator, dla dużych/nieskończonych
+źródeł, bez trzymania całej listy wyników w pamięci) oraz `khipu/serialize.py`
+(zapis/odczyt LUT256+ROPE256/ROPE48 do JSON albo pickle — pozwala
+zapisać sesję i wznowić ją później, albo wyeksportować węzły do analizy
+poza KHIPU, np. pandą). Szczegóły w `MODEL_PC.md`/`MODEL_TETRAGON_4CPU.md`.
 
 MONITOR_SCREW_FILTERS (faktyczny rendering obrazu z FRAME) nie jest
 zaimplementowany — FRAME zawiera wszystkie dane potrzebne do tego kroku,

@@ -275,6 +275,40 @@ tolerancji WIĘKSZEJ od możliwego zakresu) czynił regułę martwą niezależni
 od tego, czy φ "naprawdę coś znaczy" w tym kontekście — a to samo w sobie
 jest wykrywalnym błędem, nie kwestią gustu interpretacyjnego.
 
+### Rozbudowa: wtyczkowy DETECT_SCREW, strumieniowe API, serializacja (2026-08)
+
+Trzy dodatki niezmieniające istniejącego zachowania (domyślne wywołania
+dają identyczny wynik jak przed dodaniem):
+
+- **`CPUCore16(classifier_fn=...)`** — formalizuje to, co docstring
+  `DETECT_SCREW` od początku deklarował ("jedyne miejsce do podmiany"):
+  własna funkcja `word16 -> S` bez edycji kodu. `process_word()` i cały
+  pipeline (`SingleCPUSystem.feed()`, `TetragonSystem.feed()`) wołają
+  teraz `cpu.classify(word16)` (respektuje wstrzykniętą funkcję), nie
+  `cpu.detect_screw(word16)` bezpośrednio (co jako metoda statyczna
+  ignorowałoby stan instancji). Zwrócona wartość jest walidowana względem
+  `S.ALL` od razu w `classify()` — błędny własny klasyfikator ujawnia się
+  czytelnym `ValueError` przy pierwszym użyciu, nie dopiero głęboko w
+  `Node256`. Metody wsadowe (`detect_screw_batch` i pochodne) NIE
+  korzystają z wstrzykniętego klasyfikatora — są zwektoryzowane pod
+  konkretny bitowy algorytm domyślny.
+- **`SingleCPUSystem.feed_stream(words16)`** — generator zwracający
+  węzły jeden po drugim (zamiast `feed_many()`, które materializuje całą
+  listę wyników na raz) — dla dużych albo nieskończonych źródeł (np.
+  generator czytający plik linia po linii). Stan wewnętrzny (rope/lut/
+  gipu/frames) rośnie identycznie jak przy `feed_many()`; różnica jest
+  wyłącznie w tym, jak wyniki trafiają do wywołującego.
+- **`khipu/serialize.py`** — zapis/odczyt LUT256 i ROPE256/ROPE48 do
+  JSON (bezpieczny, czytelny) albo pickle (szybszy, ale niebezpieczny
+  przy odczycie z niezaufanego źródła — standardowa właściwość modułu
+  `pickle`, nie specyfika KHIPU). `TIMDRValidator`/`GIPUIntegrator` są
+  bezstanowe (patrz ich własne DECYZJA INTERPRETACYJNA wyżej) — cała
+  "pamięć" relacji GIPU żyje w polu `.r` każdego węzła, więc zapisanie
+  sznura już w pełni zapisuje relacje bez osobnego formatu. FrameBuffer/
+  VisualEngine celowo NIE są zapisywane (tanie do odtworzenia z okna
+  ostatnich węzłów sznura) — po odczycie bufor klatek jest pusty, aż
+  coś znowu wywoła `feed()`.
+
 ### Decyzje interpretacyjne
 
 Oryginalna dokumentacja opisuje architekturę na poziomie koncepcyjnym,
