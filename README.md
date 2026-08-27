@@ -34,10 +34,56 @@ utrudniało odróżnienie, co jest czym.
 Osobne repo **[jbackk-lang/KHIPU-NEURAL](https://github.com/jbackk-lang/KHIPU-NEURAL)**
 testuje, czy State9/F4-RED i regułę relacji GIPU da się przełożyć na
 uczony (gradientowy) moduł sieci neuronowej, zamiast deterministycznej
-symulacji jak tutaj. Wynik jest **uczciwie negatywny**: na zadaniu
-zaprojektowanym wprost pod regułę GIPU, generyczny MLP bije architekturę
-inspirowaną KHIPU (test MAE 0.365 vs 1.08, przy trywialnym predyktorze
-średniej = 1.03). Osobne repo, bo inna domena (trening gradientowy) niż
+symulacji jak tutaj. **Aktualizacja (2026-08) — wynik NIE jest już
+jednoznacznie negatywny, tylko wąski i dokładnie scharakteryzowany**,
+po pełnej serii testów kontrolnych w tamtym repo (ablacja, sweep,
+zamrożona projekcja, osobne zadanie na wartości ciągłej):
+
+- Pierwsza, "dosłowna" próba (`KHIPUResonanceNet`) — reguła GIPU
+  wpisana wprost jako sztywny wzór (iloczyn skalarny dwóch
+  skwantyzowanych kodów + sigmoid) — rzeczywiście **przegrywa**, nawet
+  z trywialnym predyktorem średniej (MAE ~1.08-1.15 vs ~1.03). To jest
+  liczba, która wcześniej stała w tym miejscu jako "wynik negatywny".
+- Ale gdy ta sama dyskretyzacja State9 (kwantyzacja do ±1 z warunkiem
+  równowagi) zostaje zachowana jako wstępny bottleneck, a AGREGACJA po
+  niej jest zwykłym, uczonym MLP zamiast sztywnego wzoru
+  (`KHIPUResonanceNetMLP`) — architektura **wygrywa** z generycznym
+  baseline'em bez żadnej struktury KHIPU, około 2x pod względem błędu
+  (MAE 0.114-0.133 vs 0.253-0.286 dla baseline'u), i przewaga NIE
+  znika przy dopasowaniu liczby parametrów (patrz ablacja w tamtym repo).
+
+**Dlaczego pierwsza próba przegrała, a druga wygrała — to dwa różne
+sposoby liczenia, nie kwestia "lepszego/gorszego" strojenia.** Reguła
+GIPU w KHIPU jest **symboliczna i dyskretna**: dokładne porównanie dwóch
+kategorii ("ten sam S i K → rezonans"), policzone raz, bez uczenia.
+Sieć neuronowa liczy inaczej — gradientowo, na rozmytych, ciągłych
+wagach, dobieranych metodą prób (spadek gradientu), nie porównaniem
+symboli. `KHIPUResonanceNet` próbowało przeszczepić DOKŁADNIE ten
+symboliczny wzór jako sztywną formułę wewnątrz sieci — czyli kazało
+systemowi gradientowemu naśladować obliczenie, które w oryginale nie
+jest w ogóle uczone, tylko jednorazowo wyprowadzone. Taki sztywny,
+z góry narzucony kształt obliczenia źle się komponuje z optymalizacją
+gradientową (która "chce" swobodnie dopasowywać wagi, nie realizować
+z góry ustalonego wzoru) — stąd porażka nawet wobec trywialnego
+baseline'u. `KHIPUResonanceNetMLP` bierze z KHIPU tylko SAM POMYSŁ
+(ostra dyskretyzacja jako filtr przed porównaniem — wymuszone
+odszumianie: obcina niepewność, zanim cokolwiek policzy dalej), ale
+zostawia dalszą agregację w pełni "myśleniu maszynowemu" (uczony MLP) —
+i to działa, bo dyskretny bottleneck i gradientowy klasyfikator
+współpracują, zamiast jeden udawać drugi.
+
+**To rozróżnienie ma też twardą granicę, nie jest uniwersalną przewagą**:
+na zadaniu wymagającym precyzyjnej wartości ciągłej (nie kategorii),
+ta sama dyskretyzacja zaczyna szkodzić — kwantyzacja do ±1 niszczy
+dokładnie tę informację (magnitudę), której takie zadanie potrzebuje
+(MAE 24.54 dla wariantu z bottleneckiem vs 17.18 dla ciągłego
+baseline'u, przy zgadywaniu średniej 25.84). Więc: dyskretny "sposób
+liczenia" KHIPU pomaga TYLKO tam, gdzie prawdziwy sygnał sam w sobie
+jest kategorialny, zaobserwowany przez szum — nie jest ogólnie lepszym
+zamiennikiem zwykłego bottlenecku. Pełne liczby, metodologia i wszystkie
+warianty pośrednie (w tym samodoskonalenie, które samo wykryło i
+cofnęło fałszywy "postęp" z 13 zamiast 9 osi bottlenecku) są w README
+tamtego repo. Osobne repo, bo inna domena (trening gradientowy) niż
 czysto deterministyczna symulacja tutaj — nie miesza się w trójwarstwową
 strukturę tego repo (kod / koncepcja / hipoteza).
 
