@@ -77,7 +77,7 @@ funkcjonalnych, tylko z dodanymi testami (`tests/test_legacy_rope.py`).
 
 ```bash
 pip install pytest
-python3 -m pytest tests/ -v      # 56 testów
+python3 -m pytest tests/ -v      # 62 testy
 
 python3 -c "
 from khipu import SingleCPUSystem
@@ -99,11 +99,21 @@ print('relacje osiowe:', t.axial_relations())
 ## Status
 
 Cały pipeline opisany w `MODEL_PC.md` i `MODEL_TETRAGON_4CPU.md` jest
-zaimplementowany i pokryty testami (56/56 przechodzi). Kilka miejsc
+zaimplementowany i pokryty testami (62/62 przechodzi). Kilka miejsc
 w oryginalnej specyfikacji było niejednoznacznych (brak konkretnego
 algorytmu bitowego, brak wzoru na niektóre reguły) — każde takie miejsce
 jest oznaczone w kodzie jako `DECYZJA INTERPRETACYJNA` i opisane w sekcji
 „Status implementacji” odpowiedniego dokumentu modelu.
+
+Stress-test na dużą skalę (2026-08, po naprawie błędu aliasingu LUT256
+opisanego w `MODEL_PC.md`): 300 000 słów przez `SingleCPUSystem` (brak
+aliasingu obiektów węzłów, przepustowość stabilna ~39 000 słów/s, bez
+degradacji na żadnym z pięciu kolejnych okien po 50 000 słów) i 200 000
+słów przez `TetragonSystem` (4 CPU, ~13 000 słów/s na CPU, stabilne w
+czasie, `Rope48` poprawnie zawija się jako pierścień FIFO bez błędów na
+setkach tysięcy wywołań `push()` na rdzeń). Przypadki brzegowe (pusty
+sznur, pojedynczy węzeł, nieznana nazwa CPU, `word16` poza zakresem
+16-bit) obsłużone bez wyjątków ani cichych błędów.
 
 MONITOR_SCREW_FILTERS (faktyczny rendering obrazu z FRAME) nie jest
 zaimplementowany — FRAME zawiera wszystkie dane potrzebne do tego kroku,

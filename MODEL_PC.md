@@ -178,14 +178,25 @@ jednostkowych operujących na małych, statycznych listach:
    długości sznura: ~50 000-56 000 słów/s (dawniej degradowała się do
    setek/s po kilku tysiącach słów).
 
-**Znany, jeszcze NIE naprawiony problem**: `LUT256.lookup()`
-cache'uje i zwraca TEN SAM obiekt `Node256` dla każdego wystąpienia
-danego `idx` — a realnych par (S,K)/idx jest tylko 7 (patrz niżej), więc
-cały sznur, niezależnie od długości, składa się z odwołań do co najwyżej
-7 współdzielonych, MUTOWALNYCH obiektów, nie z niezależnych węzłów.
-Zmiana `.r` na "jednym" wystąpieniu zmienia je jednocześnie na
-wszystkich innych pozycjach sznura o tym samym idx. To głębszy problem
-niż wydajność — dotyczy poprawności całego modelu pamięci sznura.
+**Naprawiony błąd poprawności — aliasing obiektów w LUT256 (2026-08)**:
+`LUT256.lookup()` cache'owało i zwracało TEN SAM obiekt `Node256` dla
+każdego wystąpienia danego `idx` — a realnych par (S,K)/idx jest tylko 7
+(patrz niżej), więc cały sznur, niezależnie od długości, składał się
+z odwołań do co najwyżej 7 współdzielonych, MUTOWALNYCH obiektów, nie
+z niezależnych węzłów. Zmiana `.r` na "jednym" wystąpieniu zmieniała je
+jednocześnie na wszystkich innych pozycjach sznura o tym samym idx.
+Potwierdzone empirycznie przed naprawą: 10 słów -> 4 unikalne idx ->
+tylko 4 unikalne obiekty (zamiast 10 niezależnych węzłów), `.r` identyczne
+na wszystkich pozycjach dzielących idx niezależnie od ich rzeczywistego
+sąsiedztwa w sznurze. **Naprawione**: `lookup()` zwraca teraz kopię
+(`dataclasses.replace()`), `set()` przyjmuje i przechowuje kopię
+przekazanego węzła — LUT256 nadal działa jako jeden kanoniczny szablon na
+`idx` (determinizm zachowany), ale każda pozycja w ROPE256/ROPE48 ma
+odtąd własny, niezależny obiekt. Zweryfikowane ponownie na tym samym
+przykładzie (10 słów -> 10 niezależnych obiektów) oraz stress-testem na
+300 000 słów (300 000 niezależnych obiektów, zero aliasingu). Regresyjne
+testy tożsamości obiektu: `tests/test_lut256.py::test_lookup_returns_independent_objects`,
+`::test_set_stores_independent_copy`.
 
 ### Decyzje interpretacyjne
 
