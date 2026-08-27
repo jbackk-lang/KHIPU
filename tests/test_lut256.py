@@ -30,3 +30,27 @@ def test_idx_out_of_range_rejected():
     lut = LUT256()
     with pytest.raises(ValueError):
         lut.lookup(300, s=S.PLUS, k=K.RIGHT)
+
+def test_lookup_returns_independent_objects():
+    """Regresja na bug aliasingu (patrz lut256.py docstring 'POPRAWKA BLEDU
+    ALIASINGU'): dwa lookup() na ten sam idx musza dawac ROZNE obiekty,
+    zeby mutacja jednego (np. przez GIPU.extend_relations ustawiajace .r)
+    nie zmieniala cicho drugiego."""
+    lut = LUT256()
+    n1 = lut.lookup(7, s=S.PLUS, k=K.RIGHT)
+    n2 = lut.lookup(7)
+    assert n1 is not n2
+    n1.r = "R*"
+    assert n2.r != "R*" or n2.r == lut._default_for(7, S.PLUS, K.RIGHT).r
+
+def test_set_stores_independent_copy():
+    """Regresja: set() nie powinno przechowywac zywej referencji do wezla
+    z ROPE256 - dalsza mutacja tego wezla (np. .r) nie moze cicho zmieniac
+    szablonu zapisanego w LUT256."""
+    lut = LUT256()
+    live_node = Node256(s=S.PLUS, k=K.RIGHT, idx=9)
+    lut.set(9, live_node)
+    live_node.r = "R*"
+    stored = lut.lookup(9)
+    assert stored is not live_node
+    assert stored.r != "R*"
