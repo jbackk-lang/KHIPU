@@ -73,13 +73,64 @@ class ResonanceFigure:
         self.cpus = TRIANGLE_CPUS if self.kind == "triangle" else TETRAGON_CPUS
 
     def axial_relations(self, nodes_by_cpu: Dict[str, Node256], axis: NodeAxis) -> Dict[str, str]:
-        """R_XY_axis dla każdej krawędzi (i przekątnej w tetragonie),
-        liczone jako relacja GIPU między węzłem CPU_X a stanem osi."""
+        """
+        NAPRAWIONA NIESPÓJNOŚĆ (2026-08): moduł jawnie dokumentuje topologię
+        gwiazdy — "Połączenia idą WYŁĄCZNIE przez oś — nie ma bezpośrednich
+        połączeń A<->B<->C<->D z pominięciem NODE_AXIS" (patrz docstring
+        modułu wyżej). Poprzednia implementacja tej metody robiła dokładnie
+        to, czego dokumentacja zabrania: liczyła `relation_between(a, b)`
+        BEZPOŚREDNIO między parami CPU dla wszystkich krawędzi+przekątnych
+        (czyli graf pełny K3/K4, 6 relacji dla tetragonu), a parametr `axis`
+        był przyjmowany, ale nigdy nie czytany — martwy kod. 62 istniejące
+        testy tego nie wyłapały, bo `test_axial_relations_covers_all_edges_and_diagonals`
+        sprawdzało tylko `len(rel) == 6`, nigdy że wynik zależy od stanu osi.
+
+        Poprawka: relacja liczona jest teraz FAKTYCZNIE przez oś — jedna
+        relacja NA CPU (nie na krawędź), między węzłem tego CPU a syntetycznym
+        węzłem osiowym zbudowanym z `axis.s_axis`/`axis.k_axis`. To zgodne
+        z "połączenia WYŁĄCZNIE przez oś": n relacji (hub-and-spoke), nie
+        n(n-1)/2 jak w grafie pełnym. Klucze mają teraz postać `R_{cpu}_axis`
+        (np. `R_A_axis`), nie `R_{ab}_axis` — bo krawędź "A-B" w topologii
+        gwiazdy nie istnieje jako bezpośrednie połączenie.
+
+        DECYZJA INTERPRETACYJNA: `NodeAxis.update()` agreguje tylko s/k/b/l/r
+        (nie d/w — patrz `NodeAxis.update()`), a `GIPUIntegrator.relation_between()`
+        i tak czyta wyłącznie `.s`/`.k` obu węzłów, więc syntetyczny węzeł
+        osiowy niesie tylko s_axis/k_axis (resztę pól wypełnia domyślnie
+        `Node256`) — wystarcza to do poprawnego wyniku bez zgadywania d_axis/w_axis,
+        których oś w ogóle nie utrzymuje.
+
+        Dawne zachowanie (relacja bezpośrednia CPU<->CPU, z pominięciem osi)
+        jest nadal dostępne pod jawną nazwą `direct_relations()` niżej —
+        przydatne diagnostycznie do porównania "co by było, gdyby połączenia
+        SZŁY bezpośrednio", ale to NIE jest to, co model dokumentuje jako
+        prawdziwą architekturę.
+        """
+        if axis.s_axis is None or axis.k_axis is None:
+            return {}
+        axis_node = Node256(s=axis.s_axis, k=axis.k_axis)
+        relations = {}
+        for cpu in self.cpus:
+            if cpu not in nodes_by_cpu:
+                continue
+            relations[f"R_{cpu}_axis"] = self.gipu.relation_between(
+                nodes_by_cpu[cpu], axis_node
+            )
+        return relations
+
+    def direct_relations(self, nodes_by_cpu: Dict[str, Node256]) -> Dict[str, str]:
+        """R_XY dla każdej krawędzi (i przekątnej w tetragonie), liczone
+        jako relacja GIPU BEZPOŚREDNIO między węzłami CPU_X i CPU_Y —
+        z pominięciem osi. To graf pełny (K3/K4), NIE topologia gwiazdy
+        udokumentowana dla tego modułu — patrz `axial_relations()` wyżej,
+        które jest właściwym, zgodnym z dokumentacją odpowiednikiem.
+        Zachowane jako osobna, jawnie nazwana metoda diagnostyczna (to był
+        dawny, błędnie nazwany kod `axial_relations()` sprzed naprawy)."""
         relations = {}
         for a, b in [*self.edges, *self.diagonals]:
             if a not in nodes_by_cpu or b not in nodes_by_cpu:
                 continue
-            relations[f"R_{a}{b}_axis"] = self.gipu.relation_between(
+            relations[f"R_{a}{b}"] = self.gipu.relation_between(
                 nodes_by_cpu[a], nodes_by_cpu[b]
             )
         return relations

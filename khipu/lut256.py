@@ -7,7 +7,7 @@ Wejście: idx = EMIT_INDEX(S,K). Wyjście: pełny stan topologiczny NODE256
 (z domyślnie przypisanymi D/B/W/L/R). Modyfikowalna przez TIMDR i GIPU.
 """
 
-from dataclasses import replace
+import copy
 
 from .node256 import Node256, D, B, W, L, R, derive_direction
 
@@ -44,6 +44,21 @@ class LUT256:
     obiekt Node256 — mutacja jednego węzła nie wpływa już na inne pozycje
     ani na szablon w LUT256. Regresyjny test tożsamości:
     `tests/test_lut256.py::test_lookup_returns_independent_objects`.
+
+    OPTYMALIZACJA KOPIOWANIA (2026-08): pierwsza wersja tej poprawki
+    używała `dataclasses.replace()`. `replace()` odtwarza obiekt PRZEZ
+    `__init__`, więc na każdym `lookup()`/`set()` ponownie uruchamia całą
+    walidację `Node256.__post_init__()` (7 sprawdzeń `in ...ALL`) — zmierzony
+    koszt: budowa+walidacja dataclassu jest ~1.9x wolniejsza niż budowa
+    bez walidacji (341 275 obj/s vs 637 538 obj/s, ten sam sprzęt/dane).
+    Kopiowane tu dane są JUŻ znane jako poprawne (pochodzą z `_default_for()`
+    albo z węzła, który sam przeszedł walidację przy tworzeniu) — ponowna
+    walidacja przy KAŻDEJ kopii to czysty narzut. `copy.copy()` (płytka
+    kopia) daje tę samą gwarancję niezależności obiektów — `Node256` ma
+    wyłącznie pola `str`/`int`/`Optional[int]` (niemutowalne), więc płytka
+    kopia jest tu równoważna głębokiej — ale NIE wywołuje `__init__`/
+    `__post_init__` ponownie. Poprawność bez zmian (te same testy
+    identyczności przechodzą), tylko szybciej.
     """
 
     SIZE = 256
@@ -70,7 +85,8 @@ class LUT256:
                 )
             self._table[idx] = self._default_for(idx, s, k)
         # Kopia, nie oryginał - patrz "POPRAWKA BŁĘDU ALIASINGU" w docstringu klasy.
-        return replace(self._table[idx])
+        # copy.copy() zamiast dataclasses.replace() - patrz "OPTYMALIZACJA KOPIOWANIA".
+        return copy.copy(self._table[idx])
 
     def set(self, idx: int, node: Node256) -> None:
         """Nadpisanie wpisu — używane przez TIMDR (korekta) i GIPU (relacje).
@@ -81,7 +97,7 @@ class LUT256:
         węzła w sznurze cicho zmieniałaby też szablon w LUT256)."""
         if not (0 <= idx <= 255):
             raise ValueError(f"idx poza zakresem [0,255]: {idx}")
-        self._table[idx] = replace(node)
+        self._table[idx] = copy.copy(node)
 
     def __len__(self):
         return len(self._table)
