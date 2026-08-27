@@ -24,6 +24,15 @@ from .visual import VisualEngine, Frame, FrameBuffer
 from .axis import NodeAxis, ResonanceFigure
 from .tetragon import TetragonSystem
 from .pipeline import SingleCPUSystem
+from .serialize import (
+    node_to_dict, node_from_dict,
+    lut256_to_dict, lut256_from_dict,
+    rope256_to_dict, rope256_from_dict,
+    rope48_to_dict, rope48_from_dict,
+    single_cpu_system_to_dict, single_cpu_system_from_dict,
+    tetragon_system_to_dict, tetragon_system_from_dict,
+    save_json, load_json, save_pickle, load_pickle,
+)
 
 __all__ = [
     "Node256", "S", "K", "D", "B", "W", "L", "R", "derive_direction",
@@ -31,4 +40,11 @@ __all__ = [
     "Rope256", "Rope48", "Compressor256",
     "VisualEngine", "Frame", "FrameBuffer",
     "NodeAxis", "ResonanceFigure", "TetragonSystem", "SingleCPUSystem",
+    "node_to_dict", "node_from_dict",
+    "lut256_to_dict", "lut256_from_dict",
+    "rope256_to_dict", "rope256_from_dict",
+    "rope48_to_dict", "rope48_from_dict",
+    "single_cpu_system_to_dict", "single_cpu_system_from_dict",
+    "tetragon_system_to_dict", "tetragon_system_from_dict",
+    "save_json", "load_json", "save_pickle", "load_pickle",
 ]

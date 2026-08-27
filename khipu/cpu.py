@@ -5,6 +5,8 @@ Procesor 16-bitowy wyznaczający skręt i kierunek dla słowa danych. Sam
 nie liczy drogi/brzegu/warstw/relacji — to robi LUT256 (patrz lut256.py).
 """
 
+from typing import Callable, Optional
+
 from .node256 import S, K, derive_direction, _DERIVE_DIRECTION_TABLE
 
 try:
@@ -62,8 +64,48 @@ class CPUCore16:
     faktycznie osiągalne. Regresja: `tests/test_cpu.py::test_bang_is_reachable`.
     """
 
-    def __init__(self, name: str = "CPU"):
+    def __init__(self, name: str = "CPU", classifier_fn: Optional[Callable[[int], str]] = None):
+        """
+        `classifier_fn` — WTYCZKA DETECT_SCREW (dodane 2026-08): opcjonalna,
+        wstrzykiwana funkcja `word16 -> S`, zastępująca domyślną
+        `CPUCore16.detect_screw()`. Formalizuje to, co docstring klasy od
+        początku deklarował ("ta funkcja jest jedynym miejscem do podmiany")
+        — teraz podmiana nie wymaga edycji kodu `cpu.py`, tylko przekazania
+        własnej funkcji przy tworzeniu `CPUCore16`. Domyślnie (bez podania
+        `classifier_fn`) zachowanie jest identyczne jak przed dodaniem tej
+        opcji — `detect_screw()` zostaje referencyjną implementacją domyślną.
+
+        Reszta pipeline'u (LUT256/TIMDR/GIPU/ROPE/Compressor) nadal nie
+        zależy od KONKRETNEGO klasyfikatora — tylko od tego, że zwraca coś
+        z `node256.S.ALL` (sprawdzane w `classify()` niżej, żeby błędny
+        własny klasyfikator ujawnił się od razu, a nie dopiero głęboko w
+        LUT256/Node256 z mniej czytelnym komunikatem).
+
+        Metody wsadowe (`detect_screw_batch` i pochodne) NIE korzystają z
+        wstrzykniętego `classifier_fn` — są zwektoryzowane pod KONKRETNY
+        bitowy algorytm domyślnej implementacji, więc własny klasyfikator
+        wymaga własnej wersji wsadowej, jeśli potrzebna jest szybkość na
+        dużą skalę (patrz sekcja "WSADOWA KLASYFIKACJA" niżej).
+        """
         self.name = name
+        self._classifier_fn = classifier_fn or CPUCore16.detect_screw
+
+    def classify(self, word16: int) -> str:
+        """Klasyfikuje `word16` do S, przez wstrzyknięty `classifier_fn`
+        (domyślnie `detect_screw`). To jest metoda, której faktycznie
+        używa `process_word()` i cały pipeline (`pipeline.py`/`tetragon.py`)
+        — żeby podmiana klasyfikatora na instancji miała efekt, kod
+        wołający musi wołać `cpu.classify(w)`, nie
+        `CPUCore16.detect_screw(w)` bezpośrednio (to drugie zawsze użyje
+        domyślnej implementacji, bo to metoda statyczna bez dostępu do
+        stanu instancji)."""
+        s = self._classifier_fn(word16)
+        if s not in S.ALL:
+            raise ValueError(
+                f"classifier_fn zwrócił wartość spoza domeny S.ALL: {s!r} "
+                f"(dla word16={word16})"
+            )
+        return s
 
     @staticmethod
     def detect_screw(word16: int) -> str:
@@ -108,8 +150,10 @@ class CPUCore16:
         return idx
 
     def process_word(self, word16: int):
-        """Pełny łańcuch CPU_CORE_16: word16 -> (S, K, idx)."""
-        s = self.detect_screw(word16)
+        """Pełny łańcuch CPU_CORE_16: word16 -> (S, K, idx).
+        Używa `self.classify()` (respektuje wstrzyknięty `classifier_fn`),
+        nie `self.detect_screw()` bezpośrednio."""
+        s = self.classify(word16)
         k = self.derive_direction(s)
         idx = self.emit_index(s, k)
         return s, k, idx
