@@ -28,3 +28,24 @@ def test_process_word_full_chain_consistent():
     s, k, idx = cpu.process_word(12345)
     assert k == cpu.derive_direction(s)
     assert idx == cpu.emit_index(s, k)
+
+def test_bang_is_reachable():
+    """Regresja dla martwego wariantu naprawionego 2026-08 (patrz
+    docstring CPUCore16 'NAPRAWIONY MARTWY WARIANT'): stary tiebreak
+    (parzystosc calego slowa) bylo zawsze True gdy pop_hi==pop_lo, wiec
+    S.BANG nie moglo nigdy wystapic. Sprawdzamy na calej przestrzeni
+    16-bitowej, ze OBIE galezie remisu (S.TIMES i S.BANG) sa osiagalne."""
+    seen = {cpu_result for cpu_result in (CPUCore16.detect_screw(w) for w in range(0x10000))}
+    assert S.TIMES in seen
+    assert S.BANG in seen
+
+def test_times_means_bytes_identical_bang_means_same_weight_different_bytes():
+    """S.TIMES <=> hi==lo (bajty identyczne); S.BANG <=> ta sama waga
+    bitowa, ale rozne bajty - to jest tiebreak po naprawie."""
+    for w in [0x0101, 0x0F0F, 0xABAB]:  # hi == lo
+        assert CPUCore16.detect_screw(w) == S.TIMES
+    for w in [0x0102, 0x0305]:  # popcount(hi) == popcount(lo), hi != lo
+        hi, lo = (w >> 8) & 0xFF, w & 0xFF
+        assert bin(hi).count("1") == bin(lo).count("1")
+        assert hi != lo
+        assert CPUCore16.detect_screw(w) == S.BANG

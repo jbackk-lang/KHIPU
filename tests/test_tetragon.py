@@ -17,13 +17,25 @@ def test_feed_all_four_cpus():
         assert node.idx is not None
 
 def test_axial_relations_available_after_feeding():
+    """Naprawiono 2026-08: axial_relations() liczy teraz relację przez
+    oś (hub-and-spoke, jedna na CPU), nie bezpośrednio CPU<->CPU (graf
+    pełny) - patrz axis.py ResonanceFigure.axial_relations() docstring
+    i ResonanceFigure.direct_relations() dla dawnego zachowania."""
     t = TetragonSystem()
     for i, cpu in enumerate(["A", "B", "C", "D"]):
         t.feed(cpu, (i + 1) * 4001)
     rel = t.axial_relations()
+    assert set(rel.keys()) == {"R_A_axis", "R_B_axis", "R_C_axis", "R_D_axis"}
+
+def test_direct_relations_still_available_via_figure():
+    """Dawne zachowanie (relacja bezpośrednia CPU<->CPU, z pominięciem
+    osi) jest nadal dostępne, jawnie, przez figure.direct_relations()."""
+    t = TetragonSystem()
+    for i, cpu in enumerate(["A", "B", "C", "D"]):
+        t.feed(cpu, (i + 1) * 4001)
+    rel = t.figure.direct_relations(t._last_nodes)
     assert set(rel.keys()) == {
-        "R_AB_axis", "R_BC_axis", "R_CD_axis", "R_DA_axis",
-        "R_AC_axis", "R_BD_axis",
+        "R_AB", "R_BC", "R_CD", "R_DA", "R_AC", "R_BD",
     }
 
 def test_rope_isometry_preserved_after_feeding():
