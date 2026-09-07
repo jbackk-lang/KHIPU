@@ -51,12 +51,30 @@ wszystkich CPU naraz).
 
 ## 5. Figury rezonansowe
 
-**TRÓJKĄT** (CPU A, B, C): relacje `R_AB_axis, R_BC_axis, R_CA_axis`.
-Efekt: 3 cykle współrezonujące, propagacja ΔS przez trzy węzły.
+**NAPRAWIONA NIESPÓJNOŚĆ (2026-08):** ta sekcja opisywała dawniej relacje
+osiowe jako `R_AB_axis, R_BC_axis, ...` — czyli po jednej na KAŻDĄ krawędź
+i przekątną figury (graf pełny, K3 dla trójkąta / K4 dla tetragonu). Kod
+(`ResonanceFigure.axial_relations()`) rzeczywiście tak liczył, ALE
+parametr `axis` (stan węzła osiowego) był przy tym całkowicie ignorowany
+— czyli to była relacja bezpośrednia CPU↔CPU, nie relacja "przez oś", jak
+głosi §3 wyżej ("połączenia idą WYŁĄCZNIE przez NODE_AXIS"). Naprawiono
+kod, by faktycznie liczył relację względem osi — patrz niżej.
 
-**TETRAGON** (CPU A, B, C, D): relacje `R_AB_axis, R_BC_axis, R_CD_axis,
-R_DA_axis` + przekątne `R_AC_axis, R_BD_axis`. Efekt: pełna kwadratura,
-4 cykle współrezonujące, propagacja ΔS przez całą figurę.
+**TRÓJKĄT** (CPU A, B, C): relacje `R_A_axis, R_B_axis, R_C_axis` — jedna
+na CPU, licząca relację GIPU między węzłem tego CPU a syntetycznym węzłem
+osiowym (`s_axis`/`k_axis`). Efekt: 3 połączenia przez wspólną oś
+(hub-and-spoke), propagacja ΔS przez węzeł osiowy.
+
+**TETRAGON** (CPU A, B, C, D): relacje `R_A_axis, R_B_axis, R_C_axis,
+R_D_axis` — jedna na CPU (4, nie 6), tym samym mechanizmem. Efekt: 4
+połączenia przez wspólną oś, propagacja ΔS przez całą figurę bez
+bezpośrednich połączeń A↔B↔C↔D.
+
+Dawne, bezpośrednie relacje CPU↔CPU (graf pełny, z pominięciem osi) są
+nadal dostępne jawnie przez `ResonanceFigure.direct_relations()` —
+`R_AB, R_BC, R_CA` (trójkąt) / `R_AB, R_BC, R_CD, R_DA, R_AC, R_BD`
+(tetragon) — jako narzędzie diagnostyczne do porównania z topologią
+gwiazdy, NIE jako opis rzeczywistej architektury komunikacji.
 
 ## 6. Mechanizm komunikacji rezonansowej
 
@@ -122,6 +140,55 @@ słów przetworzone bez awarii, ~14 300 słów/s, każdy sznur trwale
 utrzymuje dokładnie 48 najnowszych węzłów. Długość 48 (4×12, znaczenie
 geometryczne wg architektury) NIE została podniesiona — to nie był
 "za mały limit", tylko brakujące zawijanie.
+
+### Naprawiona niespójność: axial_relations() ignorowało oś (2026-08)
+
+Patrz §5 wyżej. `ResonanceFigure.axial_relations()` liczyło relacje
+bezpośrednio CPU↔CPU (graf pełny K3/K4, 6 relacji dla tetragonu),
+ignorując parametr `axis` — sprzeczne z własną dokumentacją modułu
+("połączenia idą WYŁĄCZNIE przez oś"). Żaden z 62 testów tego nie
+wyłapał (`test_axial_relations_covers_all_edges_and_diagonals` sprawdzało
+tylko `len(rel) == 6`). Naprawione: relacja liczona jest teraz przez
+syntetyczny węzeł osiowy (`axis.s_axis`/`axis.k_axis`), jedna na CPU
+(`R_A_axis`..`R_D_axis`, 4 nie 6). Dawne zachowanie zachowane jawnie jako
+`ResonanceFigure.direct_relations()`. Regresja:
+`tests/test_axis.py::test_axial_relations_actually_depend_on_axis_state`.
+
+### Uogólnienie na dowolne N CPU + wtyczkowy DETECT_SCREW (2026-08)
+
+`ResonanceFigure` (patrz §5 wyżej) przyjmuje teraz, obok dawnych
+`kind="triangle"`/`"tetragon"`, także `cpu_names=(...)` (jawne etykiety)
+albo `n_cpus=N` (etykiety A,B,C.. generowane automatycznie). Krawędzie/
+przekątne liczone są ogólnym wzorem wieloboku (boki = kolejne pary w
+cyklu, przekątne = wszystkie pozostałe pary) — dla N=3/4 daje DOKŁADNIE
+te same listy co dawne hardkodowane stałe (sprawdzone testem równości),
+więc `kind="triangle"`/`"tetragon"` zachowuje się identycznie jak przed
+uogólnieniem. `axial_relations()` (relacja przez oś, jedna na CPU)
+działała już dla dowolnego N od razu, bo iteruje po `self.cpus`, nie po
+krawędziach — to `direct_relations()` (graf pełny, diagnostyczne) i
+`resonance_boost()` wymagały uogólnienia; `resonance_boost()` pozostaje
+zdefiniowane TYLKO dla 3/4 CPU (klucz po LICZBIE CPU, nie po `kind`, żeby
+działało też dla własnych etykiet) i rzuca `NotImplementedError` dla
+innego N zamiast zgadywać liczbę bez podstawy źródłowej.
+
+Przy tej okazji naprawiony utajony błąd w `TetragonSystem`: figura
+zawsze budowała się z hardkodowanych etykiet `("A","B","C","D")`/
+`("A","B","C")`, niezależnie od TREŚCI faktycznych `cpu_names` przekazanych
+do konstruktora — dla domyślnych etykiet niezauważalne (bo identyczne),
+ale dla własnych nazw (`cpu_names=("W","X","Y","Z")`) klucze figury i
+`nodes_by_cpu` byłyby różne, a `axial_relations()`/`direct_relations()`
+cicho zwracałyby puste/błędne wyniki. Naprawione: figura dostaje zawsze
+`cpu_names=self.cpu_names` wprost.
+
+Dodatkowo `TetragonSystem(classifier_fn=...)` (jak `CPUCore16`, patrz
+`MODEL_PC.md`) — przekazywane do KAŻDEGO CPU w tetragonie (wszystkie są
+"identyczne" wg dokumentacji, więc dostają ten sam wstrzyknięty
+klasyfikator).
+
+Regresje: `tests/test_axis.py` (5 nowych testów N-CPU),
+`tests/test_tetragon.py::test_custom_cpu_names_figure_uses_matching_labels`,
+`::test_five_cpu_tetragon_system_works_end_to_end`,
+`::test_classifier_fn_propagates_to_all_cpus`.
 
 ### Eksperyment: realne zrównoleglenie 4 "CPU" (2026-08)
 

@@ -34,10 +34,56 @@ utrudniało odróżnienie, co jest czym.
 Osobne repo **[jbackk-lang/KHIPU-NEURAL](https://github.com/jbackk-lang/KHIPU-NEURAL)**
 testuje, czy State9/F4-RED i regułę relacji GIPU da się przełożyć na
 uczony (gradientowy) moduł sieci neuronowej, zamiast deterministycznej
-symulacji jak tutaj. Wynik jest **uczciwie negatywny**: na zadaniu
-zaprojektowanym wprost pod regułę GIPU, generyczny MLP bije architekturę
-inspirowaną KHIPU (test MAE 0.365 vs 1.08, przy trywialnym predyktorze
-średniej = 1.03). Osobne repo, bo inna domena (trening gradientowy) niż
+symulacji jak tutaj. **Aktualizacja (2026-08) — wynik NIE jest już
+jednoznacznie negatywny, tylko wąski i dokładnie scharakteryzowany**,
+po pełnej serii testów kontrolnych w tamtym repo (ablacja, sweep,
+zamrożona projekcja, osobne zadanie na wartości ciągłej):
+
+- Pierwsza, "dosłowna" próba (`KHIPUResonanceNet`) — reguła GIPU
+  wpisana wprost jako sztywny wzór (iloczyn skalarny dwóch
+  skwantyzowanych kodów + sigmoid) — rzeczywiście **przegrywa**, nawet
+  z trywialnym predyktorem średniej (MAE ~1.08-1.15 vs ~1.03). To jest
+  liczba, która wcześniej stała w tym miejscu jako "wynik negatywny".
+- Ale gdy ta sama dyskretyzacja State9 (kwantyzacja do ±1 z warunkiem
+  równowagi) zostaje zachowana jako wstępny bottleneck, a AGREGACJA po
+  niej jest zwykłym, uczonym MLP zamiast sztywnego wzoru
+  (`KHIPUResonanceNetMLP`) — architektura **wygrywa** z generycznym
+  baseline'em bez żadnej struktury KHIPU, około 2x pod względem błędu
+  (MAE 0.114-0.133 vs 0.253-0.286 dla baseline'u), i przewaga NIE
+  znika przy dopasowaniu liczby parametrów (patrz ablacja w tamtym repo).
+
+**Dlaczego pierwsza próba przegrała, a druga wygrała — to dwa różne
+sposoby liczenia, nie kwestia "lepszego/gorszego" strojenia.** Reguła
+GIPU w KHIPU jest **symboliczna i dyskretna**: dokładne porównanie dwóch
+kategorii ("ten sam S i K → rezonans"), policzone raz, bez uczenia.
+Sieć neuronowa liczy inaczej — gradientowo, na rozmytych, ciągłych
+wagach, dobieranych metodą prób (spadek gradientu), nie porównaniem
+symboli. `KHIPUResonanceNet` próbowało przeszczepić DOKŁADNIE ten
+symboliczny wzór jako sztywną formułę wewnątrz sieci — czyli kazało
+systemowi gradientowemu naśladować obliczenie, które w oryginale nie
+jest w ogóle uczone, tylko jednorazowo wyprowadzone. Taki sztywny,
+z góry narzucony kształt obliczenia źle się komponuje z optymalizacją
+gradientową (która "chce" swobodnie dopasowywać wagi, nie realizować
+z góry ustalonego wzoru) — stąd porażka nawet wobec trywialnego
+baseline'u. `KHIPUResonanceNetMLP` bierze z KHIPU tylko SAM POMYSŁ
+(ostra dyskretyzacja jako filtr przed porównaniem — wymuszone
+odszumianie: obcina niepewność, zanim cokolwiek policzy dalej), ale
+zostawia dalszą agregację w pełni "myśleniu maszynowemu" (uczony MLP) —
+i to działa, bo dyskretny bottleneck i gradientowy klasyfikator
+współpracują, zamiast jeden udawać drugi.
+
+**To rozróżnienie ma też twardą granicę, nie jest uniwersalną przewagą**:
+na zadaniu wymagającym precyzyjnej wartości ciągłej (nie kategorii),
+ta sama dyskretyzacja zaczyna szkodzić — kwantyzacja do ±1 niszczy
+dokładnie tę informację (magnitudę), której takie zadanie potrzebuje
+(MAE 24.54 dla wariantu z bottleneckiem vs 17.18 dla ciągłego
+baseline'u, przy zgadywaniu średniej 25.84). Więc: dyskretny "sposób
+liczenia" KHIPU pomaga TYLKO tam, gdzie prawdziwy sygnał sam w sobie
+jest kategorialny, zaobserwowany przez szum — nie jest ogólnie lepszym
+zamiennikiem zwykłego bottlenecku. Pełne liczby, metodologia i wszystkie
+warianty pośrednie (w tym samodoskonalenie, które samo wykryło i
+cofnęło fałszywy "postęp" z 13 zamiast 9 osi bottlenecku) są w README
+tamtego repo. Osobne repo, bo inna domena (trening gradientowy) niż
 czysto deterministyczna symulacja tutaj — nie miesza się w trójwarstwową
 strukturę tego repo (kod / koncepcja / hipoteza).
 
@@ -57,6 +103,7 @@ strukturę tego repo (kod / koncepcja / hipoteza).
 khipu/
     node256.py    NODE256: S, K, D, B, W, L, R
     cpu.py        CPU_CORE_16: DETECT_SCREW, DERIVE_DIRECTION, EMIT_INDEX
+                  + wersje wsadowe/wektorowe (numpy, opcjonalnie)
     lut256.py     LUT256
     timdr.py      TIMDR (walidacja globalna)
     gipu.py       GIPU (integrator sznura/relacji)
@@ -64,9 +111,10 @@ khipu/
     rope48.py     ROPE48 (sznur izometryczny 4x12, model 4-procesorowy)
     compressor.py COMPRESSOR256
     visual.py     VISUAL_ENGINE + FRAME_BUFFER
-    axis.py       NODE_AXIS + figury rezonansowe (trójkąt/tetragon)
-    tetragon.py   TetragonSystem — pełny model 4 CPU
+    axis.py       NODE_AXIS + figury rezonansowe (trójkąt/tetragon/dowolne N)
+    tetragon.py   TetragonSystem — pełny model N CPU (domyślnie 4)
     pipeline.py   SingleCPUSystem — pełny model 1 CPU
+    serialize.py  zapis/odczyt stanu (JSON/pickle) - LUT256, ROPE256, ROPE48
 ```
 
 Legacy: `node.py` / `rope.py` / `test.py` w katalogu głównym to oryginalny,
@@ -77,7 +125,7 @@ funkcjonalnych, tylko z dodanymi testami (`tests/test_legacy_rope.py`).
 
 ```bash
 pip install pytest
-python3 -m pytest tests/ -v      # 56 testów
+python3 -m pytest tests/ -v      # 101 testów zawsze; 114 gdy zainstalowane numpy+hypothesis (opcjonalne)
 
 python3 -c "
 from khipu import SingleCPUSystem
@@ -99,11 +147,71 @@ print('relacje osiowe:', t.axial_relations())
 ## Status
 
 Cały pipeline opisany w `MODEL_PC.md` i `MODEL_TETRAGON_4CPU.md` jest
-zaimplementowany i pokryty testami (56/56 przechodzi). Kilka miejsc
+zaimplementowany i pokryty testami (101/101 przechodzi zawsze; +13 dalszych
+w `tests/test_cpu_vectorized.py` i `tests/test_properties.py`, które
+wymagają opcjonalnych paczek `numpy`/`hypothesis` i same się pomijają,
+jeśli ich brak — 114/114 gdy obie paczki zainstalowane). Kilka miejsc
 w oryginalnej specyfikacji było niejednoznacznych (brak konkretnego
 algorytmu bitowego, brak wzoru na niektóre reguły) — każde takie miejsce
 jest oznaczone w kodzie jako `DECYZJA INTERPRETACYJNA` i opisane w sekcji
 „Status implementacji” odpowiedniego dokumentu modelu.
+
+Stress-test na dużą skalę (2026-08, po naprawie błędu aliasingu LUT256
+opisanego w `MODEL_PC.md`): 300 000 słów przez `SingleCPUSystem` (brak
+aliasingu obiektów węzłów, przepustowość stabilna ~39 000 słów/s, bez
+degradacji na żadnym z pięciu kolejnych okien po 50 000 słów) i 200 000
+słów przez `TetragonSystem` (4 CPU, ~13 000 słów/s na CPU, stabilne w
+czasie, `Rope48` poprawnie zawija się jako pierścień FIFO bez błędów na
+setkach tysięcy wywołań `push()` na rdzeń). Przypadki brzegowe (pusty
+sznur, pojedynczy węzeł, nieznana nazwa CPU, `word16` poza zakresem
+16-bit) obsłużone bez wyjątków ani cichych błędów.
+
+Dalsze poprawki po stress-teście (2026-08): (1) `ResonanceFigure.axial_relations()`
+w `axis.py` liczyło relacje bezpośrednio CPU↔CPU (graf pełny), ignorując
+parametr `axis` — sprzeczne z własną dokumentacją modułu ("połączenia
+WYŁĄCZNIE przez oś"); naprawione, patrz `MODEL_TETRAGON_4CPU.md` §5/§10.
+(2) `LUT256.lookup()`/`set()` kopiowały węzły przez `dataclasses.replace()`
+(ponownie waliduje 7 pól przy każdej kopii); zamienione na `copy.copy()`
+(ta sama gwarancja niezależności obiektów, bez zbędnej rewalidacji).
+(3) Dodano `CPUCore16.detect_screw_batch()`/`derive_direction_batch()`/
+`emit_index_batch()`/`classify_batch()` (numpy, opcjonalne) — szybka
+bezstanowa klasyfikacja masowa (12x szybciej niż pętla skalarna dla
+samej klasyfikacji), do analizy rozkładów S/K bez budowania pełnej
+symulacji; **nie** przyspiesza to proporcjonalnie `feed_many()` w całości,
+bo klasyfikacja to tylko ~5.5% czasu pełnego `feed()` na słowo — reszta
+kosztu (ROPE/GIPU/VisualEngine) jest z definicji sekwencyjna.
+(4) Dodano testy własnościowe (`tests/test_properties.py`, opcjonalne
+`hypothesis`) sprawdzające inwarianty (niezależność obiektów LUT256,
+zależność `axial_relations()` od stanu osi) na wielu losowych przypadkach
+zamiast pojedynczych przykładów — dokładnie ten rodzaj testu, którego
+brakowało, by mechanicznie wyłapać oba powyższe błędy wcześniej.
+
+**Audyt numerologia-vs-realna-matematyka (2026-08)**, protokół z
+`timdr-signal-framework` §18 zastosowany do miejsc w kodzie, gdzie φ
+"ma coś znaczyć": znalazł i naprawił dwa błędy martwego kodu, nie kwestie
+interpretacji — `S.BANG` w DETECT_SCREW było matematycznie nieosiągalne
+(zły tiebreak: parzystość sumy dwóch równych liczb jest zawsze parzysta),
+i domyślna tolerancja `φ-1≈0.618` w `TIMDRValidator.validate_rope()`
+przekraczała maksymalne możliwe odchylenie (`0.5`), więc walidacja nie
+mogła nigdy zwrócić `False` dla żadnych danych — dodatkowo nigdzie nie
+wołana w pipeline. Oba naprawione, szczegóły i zweryfikowane liczby w
+`MODEL_PC.md` sekcja "Audyt numerologia vs realna matematyka".
+
+**Rozbudowa (2026-08)**, trzy elementy z listy realnych rozszerzeń:
+(1) **wtyczkowy DETECT_SCREW** — `CPUCore16(classifier_fn=...)` pozwala
+podmienić klasyfikator word16->S bez edycji `cpu.py` (`SingleCPUSystem`/
+`TetragonSystem` przyjmują ten sam parametr i przekazują dalej); (2)
+**figura rezonansowa dla dowolnego N CPU** — `ResonanceFigure` przyjmuje
+teraz `cpu_names=(...)`/`n_cpus=N` obok dawnych `kind="triangle"/"tetragon"`
+(które dają identyczny wynik jak przed zmianą), a `TetragonSystem` już
+nie miesza etykiet figury z rzeczywistymi nazwami CPU (naprawiony przy
+okazji utajony błąd: własne `cpu_names` dawały wcześniej ciche puste
+wyniki `axial_relations()`); (3) **strumieniowe API i serializacja** —
+`SingleCPUSystem.feed_stream()` (generator, dla dużych/nieskończonych
+źródeł, bez trzymania całej listy wyników w pamięci) oraz `khipu/serialize.py`
+(zapis/odczyt LUT256+ROPE256/ROPE48 do JSON albo pickle — pozwala
+zapisać sesję i wznowić ją później, albo wyeksportować węzły do analizy
+poza KHIPU, np. pandą). Szczegóły w `MODEL_PC.md`/`MODEL_TETRAGON_4CPU.md`.
 
 MONITOR_SCREW_FILTERS (faktyczny rendering obrazu z FRAME) nie jest
 zaimplementowany — FRAME zawiera wszystkie dane potrzebne do tego kroku,

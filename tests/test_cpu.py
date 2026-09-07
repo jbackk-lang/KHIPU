@@ -28,3 +28,52 @@ def test_process_word_full_chain_consistent():
     s, k, idx = cpu.process_word(12345)
     assert k == cpu.derive_direction(s)
     assert idx == cpu.emit_index(s, k)
+
+def test_bang_is_reachable():
+    """Regresja dla martwego wariantu naprawionego 2026-08 (patrz
+    docstring CPUCore16 'NAPRAWIONY MARTWY WARIANT'): stary tiebreak
+    (parzystosc calego slowa) bylo zawsze True gdy pop_hi==pop_lo, wiec
+    S.BANG nie moglo nigdy wystapic. Sprawdzamy na calej przestrzeni
+    16-bitowej, ze OBIE galezie remisu (S.TIMES i S.BANG) sa osiagalne."""
+    seen = {cpu_result for cpu_result in (CPUCore16.detect_screw(w) for w in range(0x10000))}
+    assert S.TIMES in seen
+    assert S.BANG in seen
+
+def test_classify_uses_default_detect_screw_when_no_classifier_fn():
+    cpu = CPUCore16()
+    for w in [0, 1, 255, 4096, 32768, 65535, 12345]:
+        assert cpu.classify(w) == cpu.detect_screw(w)
+
+def test_classify_uses_injected_classifier_fn():
+    calls = []
+    def custom(word16):
+        calls.append(word16)
+        return S.MINUS
+    cpu = CPUCore16(classifier_fn=custom)
+    assert cpu.classify(999) == S.MINUS
+    assert calls == [999]
+    # detect_screw() statyczne pozostaje niezmienione (domyslna referencja)
+    assert cpu.detect_screw(999) != S.MINUS or CPUCore16.detect_screw(999) == S.MINUS
+
+def test_classify_rejects_classifier_fn_returning_outside_s_domain():
+    import pytest
+    cpu = CPUCore16(classifier_fn=lambda w: "not-a-real-S")
+    with pytest.raises(ValueError):
+        cpu.classify(1)
+
+def test_process_word_respects_injected_classifier_fn():
+    cpu = CPUCore16(classifier_fn=lambda w: S.ZERO)
+    s, k, idx = cpu.process_word(42)
+    assert s == S.ZERO
+    assert k == cpu.derive_direction(S.ZERO)
+
+def test_times_means_bytes_identical_bang_means_same_weight_different_bytes():
+    """S.TIMES <=> hi==lo (bajty identyczne); S.BANG <=> ta sama waga
+    bitowa, ale rozne bajty - to jest tiebreak po naprawie."""
+    for w in [0x0101, 0x0F0F, 0xABAB]:  # hi == lo
+        assert CPUCore16.detect_screw(w) == S.TIMES
+    for w in [0x0102, 0x0305]:  # popcount(hi) == popcount(lo), hi != lo
+        hi, lo = (w >> 8) & 0xFF, w & 0xFF
+        assert bin(hi).count("1") == bin(lo).count("1")
+        assert hi != lo
+        assert CPUCore16.detect_screw(w) == S.BANG
